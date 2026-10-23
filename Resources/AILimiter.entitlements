@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Striktní App Sandbox: aplikace nemá přístup k souborům uživatele, ploše ani jiným aplikacím -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    
+    <!-- Povoleno pouze odchozí síťové spojení pro dotazy na AI servery -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    
+    <!-- Explicitní zákaz přístupu k souborovému systému mimo vlastní sandbox kontejner -->
+    <key>com.apple.security.files.user-selected.read-only</key>
+    <false/>
+    <key>com.apple.security.files.downloads.read-only</key>
+    <false/>
+    <key>com.apple.security.assets.movies.read-only</key>
+    <false/>
+    <key>com.apple.security.assets.music.read-only</key>
+    <false/>
+    <key>com.apple.security.assets.pictures.read-only</key>
+    <false/>
+</dict>
+</plist>
