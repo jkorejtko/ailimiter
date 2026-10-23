@@ -23,4 +23,9 @@ public struct AccountCredential: Identifiable, Codable, Equatable {
         self.isEnabled = isEnabled
         self.createdAt = createdAt
     }
+
+    public var isDemo: Bool {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return trimmed == "demo" || trimmed.isEmpty
+    }
 }

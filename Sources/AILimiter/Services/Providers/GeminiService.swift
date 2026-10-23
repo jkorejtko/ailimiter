@@ -1,6 +1,6 @@
 import Foundation
 
-public final class GeminiService {
+public final class GeminiService: @unchecked Sendable {
     public static let shared = GeminiService()
     private let session = URLSession.shared
 
@@ -34,7 +34,7 @@ public final class GeminiService {
                     accountId: account.id,
                     provider: .gemini,
                     usagePercentage: 100.0,
-                    planName: "Gemini 1.5 Pro",
+                    planName: "Gemini 1.5 Pro / Flash",
                     statusDescription: "Denní/minutová kvóta vyčerpána (429)",
                     resetDate: Date().addingTimeInterval(3600),
                     healthState: .exhausted
@@ -43,11 +43,9 @@ public final class GeminiService {
                 return LimitStatus(
                     accountId: account.id,
                     provider: .gemini,
-                    usagePercentage: 15.0,
-                    usedCount: 3,
-                    totalLimit: 15,
+                    usagePercentage: 0.0,
                     planName: "Gemini 1.5 Pro / Flash",
-                    statusDescription: "Kvóta aktivní (15 RPM / 1500 RPD)",
+                    statusDescription: "Kvóta aktivní v pořádku (15 RPM / 1500 RPD)",
                     healthState: .normal
                 )
             } else {
@@ -65,8 +63,8 @@ public final class GeminiService {
             usagePercentage: 25.0,
             usedCount: 4,
             totalLimit: 15,
-            planName: isDemo ? "Gemini 1.5 Pro (Demo)" : "Gemini 1.5 Pro",
-            statusDescription: "Využití 4/15 RPM v pořádku",
+            planName: isDemo ? "Gemini 1.5 Pro (Demo simulace)" : "Gemini 1.5 Pro",
+            statusDescription: "Simulace: zadejte reálný API klíč z AI Studio",
             healthState: .normal
         )
     }

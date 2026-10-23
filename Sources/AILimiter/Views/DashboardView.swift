@@ -4,6 +4,19 @@ public struct DashboardView: View {
     @ObservedObject var monitor: LimitMonitor
     let onOpenSettings: () -> Void
     let onAddAccount: () -> Void
+    let onEditAccount: (AccountCredential) -> Void
+
+    public init(
+        monitor: LimitMonitor,
+        onOpenSettings: @escaping () -> Void,
+        onAddAccount: @escaping () -> Void,
+        onEditAccount: @escaping (AccountCredential) -> Void
+    ) {
+        self.monitor = monitor
+        self.onOpenSettings = onOpenSettings
+        self.onAddAccount = onAddAccount
+        self.onEditAccount = onEditAccount
+    }
 
     public var body: some View {
         VStack(spacing: 12) {
@@ -22,6 +35,35 @@ public struct DashboardView: View {
                 }
             }
             .padding(.horizontal, 4)
+
+            // Upozornění na Demo simulaci, pokud alespoň jeden účet nemá token
+            if monitor.accounts.contains(where: { $0.isEnabled && $0.isDemo }) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 12))
+                        .padding(.top, 1)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Účty běží v demo simulaci")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.primary)
+
+                        Text("Zobrazují se statické hodnoty. Pro napojení na živé limity vložte do účtu svůj token / klíč.")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .padding(8)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                )
+            }
 
             if monitor.accounts.isEmpty {
                 // Prázdný stav
@@ -58,6 +100,9 @@ public struct DashboardView: View {
                                 Task {
                                     await monitor.refreshAccount(account)
                                 }
+                            },
+                            onEdit: {
+                                onEditAccount(account)
                             }
                         )
                     }

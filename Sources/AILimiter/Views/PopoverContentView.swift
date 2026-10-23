@@ -86,6 +86,10 @@ public struct PopoverContentView: View {
                         onAddAccount: {
                             editingAccount = nil
                             showingAddAccountSheet = true
+                        },
+                        onEditAccount: { acc in
+                            editingAccount = acc
+                            showingAddAccountSheet = true
                         }
                     )
                 case .settings:

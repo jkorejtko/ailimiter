@@ -4,6 +4,19 @@ public struct ProviderCardView: View {
     public let account: AccountCredential
     public let status: LimitStatus?
     public let onRefresh: () -> Void
+    public var onEdit: (() -> Void)? = nil
+
+    public init(
+        account: AccountCredential,
+        status: LimitStatus?,
+        onRefresh: @escaping () -> Void,
+        onEdit: (() -> Void)? = nil
+    ) {
+        self.account = account
+        self.status = status
+        self.onRefresh = onRefresh
+        self.onEdit = onEdit
+    }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -20,10 +33,22 @@ public struct ProviderCardView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(account.title)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(account.title)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+
+                        if account.isDemo {
+                            Text("DEMO")
+                                .font(.system(size: 8, weight: .heavy))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1.5)
+                                .background(Color.orange.opacity(0.18))
+                                .foregroundColor(.orange)
+                                .cornerRadius(4)
+                        }
+                    }
 
                     Text(status?.planName ?? account.provider.defaultPlan)
                         .font(.system(size: 11))
@@ -60,9 +85,15 @@ public struct ProviderCardView: View {
 
                     // Textové info pod progress barem
                     HStack {
-                        Text("\(Int(status.usagePercentage))% využito")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
+                        if status.usagePercentage > 0.0 {
+                            Text("\(Int(status.usagePercentage))% vyčerpáno")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("V normě (0% vyčerpáno)")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
 
                         Spacer()
 
@@ -83,10 +114,34 @@ public struct ProviderCardView: View {
             HStack {
                 Text(status?.statusDescription ?? "Načítám stav...")
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(account.isDemo ? .orange.opacity(0.9) : .secondary)
                     .lineLimit(1)
 
                 Spacer()
+
+                if account.isDemo, let onEdit = onEdit {
+                    Button(action: onEdit) {
+                        Text("Zadat token")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2.5)
+                            .background(Color.orange.opacity(0.12))
+                            .cornerRadius(5)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Zadat skutečný token pro živá data")
+                }
+
+                if let onEdit = onEdit {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Upravit účet")
+                }
 
                 // Otevřít web služby
                 Button(action: {
@@ -117,7 +172,7 @@ public struct ProviderCardView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                .stroke(account.isDemo ? Color.orange.opacity(0.25) : Color.primary.opacity(0.06), lineWidth: 1)
         )
     }
 }
