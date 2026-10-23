@@ -28,7 +28,7 @@ public enum AIProvider: String, Codable, CaseIterable, Identifiable {
         case .claude:
             return "Claude Pro / Max"
         case .gemini:
-            return "Gemini 1.5 Pro / Advanced"
+            return "Google AI Studio API"
         case .perplexity:
             return "Perplexity Pro"
         }

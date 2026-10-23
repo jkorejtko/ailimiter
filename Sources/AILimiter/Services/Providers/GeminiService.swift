@@ -22,7 +22,7 @@ public final class GeminiService: @unchecked Sendable {
         request.timeoutInterval = 8.0
 
         do {
-            let (_, response) = try await session.data(for: request)
+            let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 return errorStatus(for: account, message: "Neplatná odpověď")
             }
@@ -34,18 +34,31 @@ public final class GeminiService: @unchecked Sendable {
                     accountId: account.id,
                     provider: .gemini,
                     usagePercentage: 100.0,
-                    planName: "Gemini 1.5 Pro / Flash",
-                    statusDescription: "Denní/minutová kvóta vyčerpána (429)",
+                    planName: "Google AI Studio API",
+                    statusDescription: "Kvóta vyčerpána (429 Resource Exhausted)",
                     resetDate: Date().addingTimeInterval(3600),
                     healthState: .exhausted
                 )
             } else if httpResponse.statusCode == 200 {
+                var modelsCount: Int? = nil
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let models = json["models"] as? [[String: Any]] {
+                    modelsCount = models.count
+                }
+
+                let desc: String
+                if let count = modelsCount, count > 0 {
+                    desc = "Klíč aktivní (\(count) modelů k dispozici)"
+                } else {
+                    desc = "Klíč aktivní v pořádku"
+                }
+
                 return LimitStatus(
                     accountId: account.id,
                     provider: .gemini,
                     usagePercentage: 0.0,
-                    planName: "Gemini 1.5 Pro / Flash",
-                    statusDescription: "Kvóta aktivní v pořádku (15 RPM / 1500 RPD)",
+                    planName: "Google AI Studio API",
+                    statusDescription: desc,
                     healthState: .normal
                 )
             } else {
@@ -63,8 +76,8 @@ public final class GeminiService: @unchecked Sendable {
             usagePercentage: 25.0,
             usedCount: 4,
             totalLimit: 15,
-            planName: isDemo ? "Gemini 1.5 Pro (Demo simulace)" : "Gemini 1.5 Pro",
-            statusDescription: "Simulace: zadejte reálný API klíč z AI Studio",
+            planName: isDemo ? "Google AI Studio (Demo simulace)" : "Google AI Studio API",
+            statusDescription: "Simulace: zadejte reálný API klíč z aistudio.google.com",
             healthState: .normal
         )
     }
@@ -74,7 +87,7 @@ public final class GeminiService: @unchecked Sendable {
             accountId: account.id,
             provider: .gemini,
             usagePercentage: 0.0,
-            planName: "Gemini",
+            planName: "Google AI Studio API",
             statusDescription: message,
             healthState: .error
         )
