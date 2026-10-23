@@ -11,6 +11,7 @@ public struct AddAccountSheet: View {
     @State private var isHelpExpanded: Bool = false
     @State private var isTesting: Bool = false
     @State private var testResult: String? = nil
+    @State private var isTokenVisible: Bool = false
 
     public init(monitor: LimitMonitor, accountToEdit: AccountCredential? = nil, onDismiss: @escaping () -> Void) {
         self.monitor = monitor
@@ -91,9 +92,45 @@ public struct AddAccountSheet: View {
                     .buttonStyle(.plain)
                 }
 
-                SecureField(selectedProvider.tokenPlaceholder, text: $token)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12))
+                HStack {
+                    if isTokenVisible {
+                        TextField(selectedProvider.tokenPlaceholder, text: $token)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 12))
+                    } else {
+                        SecureField(selectedProvider.tokenPlaceholder, text: $token)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 12))
+                    }
+
+                    // Tlačítko zobrazení / skrytí tokenu
+                    Button(action: { isTokenVisible.toggle() }) {
+                        Image(systemName: isTokenVisible ? "eye.slash" : "eye")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isTokenVisible ? "Skrýt token" : "Zobrazit token")
+
+                    // Tlačítko Vložit ze schránky
+                    Button(action: {
+                        if let clipboard = NSPasteboard.general.string(forType: .string) {
+                            token = clipboard.trimmingCharacters(in: .whitespacesAndNewlines)
+                        }
+                    }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "doc.on.clipboard")
+                            Text("Vložit")
+                        }
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.12))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Vložit ze schránky Macu")
+                }
 
                 if isHelpExpanded {
                     VStack(alignment: .leading, spacing: 4) {

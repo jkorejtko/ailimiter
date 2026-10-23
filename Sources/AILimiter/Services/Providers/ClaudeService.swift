@@ -7,18 +7,33 @@ public final class ClaudeService {
     private init() {}
 
     public func fetchLimitStatus(for account: AccountCredential) async -> LimitStatus {
-        let token = account.token.trimmingCharacters(in: .whitespacesAndNewlines)
+        var token = account.token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if token.hasPrefix("Bearer ") {
+            token = String(token.dropFirst(7)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if token.hasPrefix("sessionKey=") {
+            token = String(token.dropFirst(11)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
 
         if token.lowercased().hasPrefix("demo") || token.isEmpty {
             return mockStatus(for: account, isDemo: true)
         }
 
-        // 1. Anthropic API Key
-        if token.hasPrefix("sk-ant-api") {
+        // 1. Claude.ai session key (sk-ant-sid...)
+        if token.hasPrefix("sk-ant-sid") {
+            return await fetchClaudeWebStatus(for: account, sessionKey: token)
+        }
+
+        // 2. Jakýkoliv Anthropic API klíč (sk-ant-api..., sk-ant-...)
+        if token.hasPrefix("sk-ant-") {
             return await fetchAnthropicAPIStatus(for: account, apiKey: token)
         }
 
-        // 2. Claude.ai session key (sk-ant-sid01-...)
+        // 3. Fallback: zkusíme API volání
+        let apiStatus = await fetchAnthropicAPIStatus(for: account, apiKey: token)
+        if apiStatus.healthState != .error {
+            return apiStatus
+        }
         return await fetchClaudeWebStatus(for: account, sessionKey: token)
     }
 
@@ -88,7 +103,7 @@ public final class ClaudeService {
             }
 
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-                return errorStatus(for: account, message: "Expirovaný sessionKey")
+                return errorStatus(for: account, message: "Neplatný klíč nebo session (401/403)")
             } else if httpResponse.statusCode == 429 {
                 return LimitStatus(
                     accountId: account.id,

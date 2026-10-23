@@ -7,7 +7,13 @@ public final class ChatGPTService {
     private init() {}
 
     public func fetchLimitStatus(for account: AccountCredential) async -> LimitStatus {
-        let token = account.token.trimmingCharacters(in: .whitespacesAndNewlines)
+        var token = account.token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if token.hasPrefix("Bearer ") {
+            token = String(token.dropFirst(7)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if token.hasPrefix("__Secure-next-auth.session-token=") {
+            token = String(token.dropFirst(33)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
 
         // Pokud jde o demo / testovací token
         if token.lowercased().hasPrefix("demo") || token.isEmpty {
