@@ -6,6 +6,9 @@ public struct SettingsView: View {
     let onEditAccount: (AccountCredential) -> Void
     let onAddAccount: () -> Void
 
+    @State private var accountToDelete: AccountCredential? = nil
+    @State private var showingDeleteConfirmation: Bool = false
+
     public var body: some View {
         VStack(spacing: 12) {
             // Hlavička nastavení
@@ -83,12 +86,16 @@ public struct SettingsView: View {
                                         }
                                         .buttonStyle(.plain)
 
-                                        Button(action: { monitor.deleteAccount(id: account.id) }) {
+                                        Button(action: {
+                                            accountToDelete = account
+                                            showingDeleteConfirmation = true
+                                        }) {
                                             Image(systemName: "trash")
                                                 .font(.system(size: 11))
                                                 .foregroundColor(.red.opacity(0.8))
                                         }
                                         .buttonStyle(.plain)
+                                        .help("Odebrat účet")
                                     }
                                     .padding(8)
                                     .background(Color.primary.opacity(0.03))
@@ -191,6 +198,21 @@ public struct SettingsView: View {
                 }
                 .padding(.horizontal, 14)
             }
+        }
+        .alert(
+            "Odebrat spárovaný účet?",
+            isPresented: $showingDeleteConfirmation,
+            presenting: accountToDelete
+        ) { account in
+            Button("Odebrat", role: .destructive) {
+                monitor.deleteAccount(id: account.id)
+                accountToDelete = nil
+            }
+            Button("Zrušit", role: .cancel) {
+                accountToDelete = nil
+            }
+        } message: { account in
+            Text("Opravdu chcete odebrat účet „\(account.title)“ (\(account.provider.displayName))? Uložené přihlašovací údaje a klíče budou smazány.")
         }
     }
 }
