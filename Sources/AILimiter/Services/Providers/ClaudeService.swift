@@ -15,8 +15,12 @@ public final class ClaudeService: @unchecked Sendable {
             token = String(token.dropFirst(11)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        if token.lowercased().hasPrefix("demo") || token.isEmpty {
-            return mockStatus(for: account, isDemo: true)
+        if token.isEmpty {
+            return errorStatus(for: account, message: "Není zadán session klíč")
+        }
+
+        if token.lowercased() == "demo" {
+            return mockStatus(for: account)
         }
 
         // 1. Claude.ai session key (sk-ant-sid...)
@@ -215,17 +219,18 @@ public final class ClaudeService: @unchecked Sendable {
         }
     }
 
-    private func mockStatus(for account: AccountCredential, isDemo: Bool) -> LimitStatus {
+    private func mockStatus(for account: AccountCredential) -> LimitStatus {
         return LimitStatus(
             accountId: account.id,
             provider: .claude,
             usagePercentage: 82.0,
             usedCount: 37,
             totalLimit: 45,
-            planName: isDemo ? "Claude Pro (Demo simulace)" : "Claude Pro",
+            planName: "Claude Pro [DEMO]",
             statusDescription: "Simulace: zadejte reálný sessionKey",
             resetDate: Date().addingTimeInterval(2700),
-            healthState: .warning
+            healthState: .warning,
+            isDemo: true
         )
     }
 

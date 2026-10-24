@@ -15,9 +15,12 @@ public final class ChatGPTService: @unchecked Sendable {
             token = String(token.dropFirst(33)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        // Pokud jde o demo / testovací token
-        if token.lowercased().hasPrefix("demo") || token.isEmpty {
-            return mockStatus(for: account, isDemo: true)
+        if token.isEmpty {
+            return errorStatus(for: account, message: "Není zadán token")
+        }
+
+        if token.lowercased() == "demo" {
+            return mockStatus(for: account)
         }
 
         // 1. Varianta: OpenAI API Key (sk-...)
@@ -277,17 +280,18 @@ public final class ChatGPTService: @unchecked Sendable {
         }
     }
 
-    private func mockStatus(for account: AccountCredential, isDemo: Bool) -> LimitStatus {
+    private func mockStatus(for account: AccountCredential) -> LimitStatus {
         return LimitStatus(
             accountId: account.id,
             provider: .chatgpt,
             usagePercentage: 45.0,
             usedCount: 18,
             totalLimit: 40,
-            planName: isDemo ? "ChatGPT Plus (Demo simulace)" : "ChatGPT Plus",
+            planName: "ChatGPT Plus [DEMO]",
             statusDescription: "Simulace: zadejte reálný token pro živá data",
             resetDate: Date().addingTimeInterval(4200),
-            healthState: .normal
+            healthState: .normal,
+            isDemo: true
         )
     }
 

@@ -39,10 +39,10 @@ public struct ProviderCardView: View {
                             .foregroundColor(.primary)
                             .lineLimit(1)
 
-                        if account.isDemo {
+                        if account.isDemo || status?.isDemo == true {
                             Text("DEMO")
                                 .font(.system(size: 8, weight: .heavy))
-                                .padding(.horizontal, 4)
+                                .padding(.horizontal, 5)
                                 .padding(.vertical, 1.5)
                                 .background(Color.orange.opacity(0.18))
                                 .foregroundColor(.orange)
@@ -59,7 +59,7 @@ public struct ProviderCardView: View {
 
                 // Stavový odznak
                 if let health = status?.healthState {
-                    StatusBadge(health: health)
+                    StatusBadge(health: health, isDemo: account.isDemo || status?.isDemo == true)
                 }
             }
 
@@ -179,20 +179,21 @@ public struct ProviderCardView: View {
 
 struct StatusBadge: View {
     let health: LimitHealthState
+    var isDemo: Bool = false
 
     var body: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(health.color)
+                .fill(isDemo ? Color.orange : health.color)
                 .frame(width: 6, height: 6)
 
-            Text(health.badgeTitle)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(health.color)
+            Text(isDemo ? "DEMO" : health.badgeTitle)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(isDemo ? Color.orange : health.color)
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
-        .background(health.color.opacity(0.12))
+        .background((isDemo ? Color.orange : health.color).opacity(0.12))
         .cornerRadius(6)
     }
 }

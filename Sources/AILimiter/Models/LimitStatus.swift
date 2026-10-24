@@ -44,6 +44,7 @@ public struct LimitStatus: Identifiable, Codable, Equatable {
     public var statusDescription: String    // e.g. "Zbývají 2 zprávy"
     public var resetDate: Date?             // Kdy se limit obnoví
     public var healthState: LimitHealthState
+    public var isDemo: Bool
     public var lastChecked: Date
 
     public init(
@@ -57,6 +58,7 @@ public struct LimitStatus: Identifiable, Codable, Equatable {
         statusDescription: String,
         resetDate: Date? = nil,
         healthState: LimitHealthState = .normal,
+        isDemo: Bool = false,
         lastChecked: Date = Date()
     ) {
         self.id = id
@@ -69,6 +71,7 @@ public struct LimitStatus: Identifiable, Codable, Equatable {
         self.statusDescription = statusDescription
         self.resetDate = resetDate
         self.healthState = healthState
+        self.isDemo = isDemo
         self.lastChecked = lastChecked
     }
 

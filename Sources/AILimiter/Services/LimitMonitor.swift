@@ -179,8 +179,25 @@ public final class LimitMonitor: ObservableObject {
 
         statuses[account.id] = newStatus
 
+        // Pokud se reálný účet úspěšně spojí s API, automaticky odpojíme demo účty
+        if !account.isDemo && newStatus.healthState != .error && !newStatus.isDemo {
+            purgeDemoAccounts()
+        }
+
         // Kontrola notifikací při přechodu stavů
         checkNotifications(oldStatus: previousStatus, newStatus: newStatus)
+    }
+
+    public func purgeDemoAccounts() {
+        let demoAccounts = accounts.filter { $0.isDemo }
+        guard !demoAccounts.isEmpty else { return }
+
+        for demo in demoAccounts {
+            statuses.removeValue(forKey: demo.id)
+            KeychainManager.shared.delete(for: demo.id)
+        }
+        accounts.removeAll(where: { $0.isDemo })
+        saveAccounts()
     }
 
     private func checkNotifications(oldStatus: LimitStatus?, newStatus: LimitStatus) {

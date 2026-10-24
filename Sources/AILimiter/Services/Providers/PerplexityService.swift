@@ -9,8 +9,12 @@ public final class PerplexityService: @unchecked Sendable {
     public func fetchLimitStatus(for account: AccountCredential) async -> LimitStatus {
         let token = account.token.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if token.lowercased().hasPrefix("demo") || token.isEmpty {
-            return mockStatus(for: account, isDemo: true)
+        if token.isEmpty {
+            return errorStatus(for: account, message: "Není zadán klíč ani cookie")
+        }
+
+        if token.lowercased() == "demo" {
+            return mockStatus(for: account)
         }
 
         // 1. Varianta: API Klíč (pplx-...)
@@ -145,16 +149,17 @@ public final class PerplexityService: @unchecked Sendable {
         }
     }
 
-    private func mockStatus(for account: AccountCredential, isDemo: Bool) -> LimitStatus {
+    private func mockStatus(for account: AccountCredential) -> LimitStatus {
         return LimitStatus(
             accountId: account.id,
             provider: .perplexity,
             usagePercentage: 15.0,
             usedCount: 45,
             totalLimit: 300,
-            planName: isDemo ? "Perplexity Pro (Demo simulace)" : "Perplexity Pro",
+            planName: "Perplexity Pro [DEMO]",
             statusDescription: "Simulace: zadejte reálný API klíč nebo cookie",
-            healthState: .normal
+            healthState: .normal,
+            isDemo: true
         )
     }
 

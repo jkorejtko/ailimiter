@@ -9,8 +9,12 @@ public final class GeminiService: @unchecked Sendable {
     public func fetchLimitStatus(for account: AccountCredential) async -> LimitStatus {
         let token = account.token.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if token.lowercased().hasPrefix("demo") || token.isEmpty {
-            return mockStatus(for: account, isDemo: true)
+        if token.isEmpty {
+            return errorStatus(for: account, message: "Není zadán API klíč")
+        }
+
+        if token.lowercased() == "demo" {
+            return mockStatus(for: account)
         }
 
         guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models?key=\(token)") else {
@@ -37,7 +41,8 @@ public final class GeminiService: @unchecked Sendable {
                     planName: "Google AI Studio API",
                     statusDescription: "Kvóta vyčerpána (429 Resource Exhausted)",
                     resetDate: Date().addingTimeInterval(3600),
-                    healthState: .exhausted
+                    healthState: .exhausted,
+                    isDemo: false
                 )
             } else if httpResponse.statusCode == 200 {
                 var modelsCount: Int? = nil
@@ -59,7 +64,8 @@ public final class GeminiService: @unchecked Sendable {
                     usagePercentage: 0.0,
                     planName: "Google AI Studio API",
                     statusDescription: desc,
-                    healthState: .normal
+                    healthState: .normal,
+                    isDemo: false
                 )
             } else {
                 return errorStatus(for: account, message: "HTTP \(httpResponse.statusCode)")
@@ -69,16 +75,18 @@ public final class GeminiService: @unchecked Sendable {
         }
     }
 
-    private func mockStatus(for account: AccountCredential, isDemo: Bool) -> LimitStatus {
+    private func mockStatus(for account: AccountCredential) -> LimitStatus {
         return LimitStatus(
             accountId: account.id,
             provider: .gemini,
             usagePercentage: 25.0,
             usedCount: 4,
             totalLimit: 15,
-            planName: isDemo ? "Google AI Studio (Demo simulace)" : "Google AI Studio API",
+            planName: "Google AI Studio API [DEMO]",
             statusDescription: "Simulace: zadejte reálný API klíč z aistudio.google.com",
-            healthState: .normal
+            resetDate: Date().addingTimeInterval(3600),
+            healthState: .normal,
+            isDemo: true
         )
     }
 
@@ -89,7 +97,8 @@ public final class GeminiService: @unchecked Sendable {
             usagePercentage: 0.0,
             planName: "Google AI Studio API",
             statusDescription: message,
-            healthState: .error
+            healthState: .error,
+            isDemo: false
         )
     }
 }
