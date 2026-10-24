@@ -42,30 +42,60 @@ public final class ClaudeService: @unchecked Sendable {
     }
 
     private func fetchAnthropicAPIStatus(for account: AccountCredential, apiKey: String) async -> LimitStatus {
-        guard let url = URL(string: "https://api.anthropic.com/v1/models") else {
+        guard let url = URL(string: "https://api.anthropic.com/v1/messages") else {
             return errorStatus(for: account, message: "Neplatná URL")
         }
 
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = "POST"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let payload: [String: Any] = [
+            "model": "claude-3-haiku-20240307",
+            "messages": [["role": "user", "content": "ping"]],
+            "max_tokens": 1
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         request.timeoutInterval = 8.0
 
         do {
-            let (_, response) = try await session.data(for: request)
+            let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 return errorStatus(for: account, message: "Neplatná odpověď")
             }
 
             if httpResponse.statusCode == 401 {
                 return errorStatus(for: account, message: "Neplatný API klíč")
+            } else if httpResponse.statusCode == 400 {
+                // Zkontrolujeme, zda jde o nedostatek kreditu
+                var isBalanceExhausted = false
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let errorObj = json["error"] as? [String: Any] {
+                    let msg = errorObj["message"] as? String ?? ""
+                    if msg.lowercased().contains("credit balance is too low") || msg.lowercased().contains("purchase credits") {
+                        isBalanceExhausted = true
+                    }
+                }
+
+                if isBalanceExhausted {
+                    return LimitStatus(
+                        accountId: account.id,
+                        provider: .claude,
+                        usagePercentage: 100.0,
+                        planName: "Anthropic Console API",
+                        statusDescription: "Kredit vyčerpán (nulový zůstatek v Console)",
+                        healthState: .exhausted
+                    )
+                }
+
+                return errorStatus(for: account, message: "HTTP 400 (Chyba požadavku)")
             } else if httpResponse.statusCode == 429 {
                 return LimitStatus(
                     accountId: account.id,
                     provider: .claude,
                     usagePercentage: 100.0,
-                    planName: "Anthropic API",
+                    planName: "Anthropic Console API",
                     statusDescription: "Rate limit vyčerpán (429)",
                     resetDate: Date().addingTimeInterval(1800),
                     healthState: .exhausted
@@ -85,7 +115,7 @@ public final class ClaudeService: @unchecked Sendable {
                         usagePercentage: pct,
                         usedCount: used,
                         totalLimit: lim,
-                        planName: "Anthropic API",
+                        planName: "Anthropic Console API",
                         statusDescription: "\(used)/\(lim) req/min (\(rem) zbývá)",
                         healthState: health
                     )
@@ -95,8 +125,8 @@ public final class ClaudeService: @unchecked Sendable {
                     accountId: account.id,
                     provider: .claude,
                     usagePercentage: 0.0,
-                    planName: "Anthropic API",
-                    statusDescription: "Aktivní API klíč (v pořádku)",
+                    planName: "Anthropic Console API",
+                    statusDescription: "Klíč aktivní (kredit k dispozici)",
                     healthState: .normal
                 )
             } else {

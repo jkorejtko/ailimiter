@@ -33,17 +33,24 @@ public final class ChatGPTService: @unchecked Sendable {
     }
 
     private func fetchOpenAIAPIStatus(for account: AccountCredential, apiKey: String) async -> LimitStatus {
-        guard let url = URL(string: "https://api.openai.com/v1/models") else {
+        guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
             return errorStatus(for: account, message: "Neplatná URL")
         }
 
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let payload: [String: Any] = [
+            "model": "gpt-4o-mini",
+            "messages": [["role": "user", "content": "ping"]],
+            "max_tokens": 1
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         request.timeoutInterval = 8.0
 
         do {
-            let (_, response) = try await session.data(for: request)
+            let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 return errorStatus(for: account, message: "Neplatná odpověď serveru")
             }
@@ -51,6 +58,29 @@ public final class ChatGPTService: @unchecked Sendable {
             if httpResponse.statusCode == 401 {
                 return errorStatus(for: account, message: "Neplatný API klíč")
             } else if httpResponse.statusCode == 429 {
+                // Zkontrolujeme, zda jde o vyčerpaný kredit nebo chvilkový rate-limit
+                var isBalanceExhausted = false
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let errorObj = json["error"] as? [String: Any] {
+                    let code = errorObj["code"] as? String ?? ""
+                    let type = errorObj["type"] as? String ?? ""
+                    let msg = errorObj["message"] as? String ?? ""
+                    if code == "credit_balance_exhausted" || type == "insufficient_quota" || msg.lowercased().contains("credit") {
+                        isBalanceExhausted = true
+                    }
+                }
+
+                if isBalanceExhausted {
+                    return LimitStatus(
+                        accountId: account.id,
+                        provider: .chatgpt,
+                        usagePercentage: 100.0,
+                        planName: "OpenAI Platform API",
+                        statusDescription: "Kredit vyčerpán (0 $ zůstatek na účtu)",
+                        healthState: .exhausted
+                    )
+                }
+
                 let resetHeader = httpResponse.value(forHTTPHeaderField: "x-ratelimit-reset-requests")
                 var resetDate: Date? = nil
                 if let resetSec = resetHeader.flatMap(Double.init) {
@@ -63,7 +93,7 @@ public final class ChatGPTService: @unchecked Sendable {
                     accountId: account.id,
                     provider: .chatgpt,
                     usagePercentage: 100.0,
-                    planName: "OpenAI API",
+                    planName: "OpenAI Platform API",
                     statusDescription: "Rate limit vyčerpán (429)",
                     resetDate: resetDate,
                     healthState: .exhausted
@@ -83,7 +113,7 @@ public final class ChatGPTService: @unchecked Sendable {
                         usagePercentage: percentage,
                         usedCount: used,
                         totalLimit: lim,
-                        planName: "OpenAI API",
+                        planName: "OpenAI Platform API",
                         statusDescription: "\(used)/\(lim) req/min (\(rem) zbývá)",
                         healthState: health
                     )
@@ -93,8 +123,8 @@ public final class ChatGPTService: @unchecked Sendable {
                     accountId: account.id,
                     provider: .chatgpt,
                     usagePercentage: 0.0,
-                    planName: "OpenAI API",
-                    statusDescription: "Aktivní API klíč (v pořádku)",
+                    planName: "OpenAI Platform API",
+                    statusDescription: "Klíč aktivní (kredit k dispozici)",
                     healthState: .normal
                 )
             } else {

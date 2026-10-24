@@ -90,7 +90,7 @@ public struct ProviderCardView: View {
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(.secondary)
                         } else {
-                            Text("V normě (0% vyčerpáno)")
+                            Text("Aktivní v normě")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(.secondary)
                         }
