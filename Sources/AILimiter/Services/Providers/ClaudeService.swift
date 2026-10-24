@@ -68,13 +68,15 @@ public final class ClaudeService: @unchecked Sendable {
             if httpResponse.statusCode == 401 {
                 return errorStatus(for: account, message: "Neplatný API klíč")
             } else if httpResponse.statusCode == 400 {
-                // Zkontrolujeme, zda jde o nedostatek kreditu
                 var isBalanceExhausted = false
+                var errorMsg = "Chyba požadavku (HTTP 400)"
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let errorObj = json["error"] as? [String: Any] {
                     let msg = errorObj["message"] as? String ?? ""
                     if msg.lowercased().contains("credit balance is too low") || msg.lowercased().contains("purchase credits") {
                         isBalanceExhausted = true
+                    } else if !msg.isEmpty {
+                        errorMsg = msg
                     }
                 }
 
@@ -82,14 +84,14 @@ public final class ClaudeService: @unchecked Sendable {
                     return LimitStatus(
                         accountId: account.id,
                         provider: .claude,
-                        usagePercentage: 100.0,
+                        usagePercentage: 0.0,
                         planName: "Anthropic Console API",
                         statusDescription: "Kredit vyčerpán (nulový zůstatek v Console)",
                         healthState: .exhausted
                     )
                 }
 
-                return errorStatus(for: account, message: "HTTP 400 (Chyba požadavku)")
+                return errorStatus(for: account, message: errorMsg)
             } else if httpResponse.statusCode == 429 {
                 return LimitStatus(
                     accountId: account.id,
@@ -116,7 +118,7 @@ public final class ClaudeService: @unchecked Sendable {
                         usedCount: used,
                         totalLimit: lim,
                         planName: "Anthropic Console API",
-                        statusDescription: "\(used)/\(lim) req/min (\(rem) zbývá)",
+                        statusDescription: "\(used)/\(lim) req/min",
                         healthState: health
                     )
                 }
@@ -197,13 +199,13 @@ public final class ClaudeService: @unchecked Sendable {
 
                 if let (usageData, usageResponse) = try? await session.data(for: usageRequest),
                    let usageHttp = usageResponse as? HTTPURLResponse, usageHttp.statusCode == 200 {
+                    if let rawString = String(data: usageData, encoding: .utf8) {
+                        NSLog("[AILimiter-Claude] usage response: %@", rawString)
+                    }
                     if let usageJson = try? JSONSerialization.jsonObject(with: usageData) as? [String: Any] {
-                        if let fiveHour = usageJson["five_hour"] as? [String: Any] {
-                            var util = fiveHour["utilization"] as? Double ?? 0.0
-                            if util <= 1.0 && util > 0.0 {
-                                util *= 100.0
-                            }
-                            util = min(100.0, max(0.0, util))
+                        if let fiveHour = usageJson["five_hour"] as? [String: Any],
+                           let rawUtil = (fiveHour["utilization"] as? Double) ?? (fiveHour["utilization"] as? Int).map(Double.init) {
+                            let util = min(100.0, max(0.0, rawUtil))
 
                             var resetDate: Date? = nil
                             if let resetStr = fiveHour["resets_at"] as? String {
@@ -217,7 +219,7 @@ public final class ClaudeService: @unchecked Sendable {
                             if util >= 100.0 {
                                 desc = "Limit zpráv 5h okna vyčerpán"
                             } else {
-                                desc = "5h okno: \(Int(util))% vyčerpáno (zbývá \(100 - Int(util))%)"
+                                desc = "5h plovoucí okno zpráv"
                             }
 
                             return LimitStatus(
@@ -229,18 +231,28 @@ public final class ClaudeService: @unchecked Sendable {
                                 resetDate: resetDate,
                                 healthState: health
                             )
+                        } else {
+                            // five_hour nebo utilization v odpovědi chybí
+                            return LimitStatus(
+                                accountId: account.id,
+                                provider: .claude,
+                                usagePercentage: 0.0,
+                                planName: plan,
+                                statusDescription: "Údaje o 5h limitu nejsou k dispozici",
+                                healthState: .normal
+                            )
                         }
                     }
                 }
             }
 
-            // Fallback pokud usage endpoint nevrátil five_hour
+            // Fallback pokud usage endpoint vůbec neodpověděl
             return LimitStatus(
                 accountId: account.id,
                 provider: .claude,
                 usagePercentage: 0.0,
                 planName: plan,
-                statusDescription: "Aktivní session (v pořádku)",
+                statusDescription: "Údaje o limitu nedostupné",
                 healthState: .normal
             )
 

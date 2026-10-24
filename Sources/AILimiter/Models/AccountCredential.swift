@@ -25,6 +25,13 @@ public struct AccountCredential: Identifiable, Codable, Equatable {
     }
 
     public var isDemo: Bool {
+        if provider == .gemini {
+            let realHome = URL(fileURLWithPath: "/Users/\(NSUserName())")
+            let baseDir = realHome.appendingPathComponent(".gemini/antigravity-ide/brain")
+            if FileManager.default.fileExists(atPath: baseDir.path) {
+                return false
+            }
+        }
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return trimmed == "demo" || trimmed.isEmpty
     }

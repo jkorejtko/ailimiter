@@ -126,7 +126,7 @@ public final class PerplexityService: @unchecked Sendable {
                                 usedCount: used,
                                 totalLimit: limit,
                                 planName: "Perplexity Pro",
-                                statusDescription: "\(rem) Pro dotazů zbývá dnes",
+                                statusDescription: "\(used)/\(limit) Pro dotazů dnes",
                                 healthState: health
                             )
                         }

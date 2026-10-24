@@ -32,14 +32,19 @@ public struct ProviderCardView: View {
                         .foregroundColor(account.provider.brandColor)
                 }
 
+                let isAntigravity = status?.planName.contains("Antigravity") == true
+                let mainTitle = isAntigravity ? (status?.planName ?? "Antigravity IDE") : account.title
+                let subTitle = isAntigravity ? "Google DeepMind" : (status?.planName ?? account.provider.defaultPlan)
+                let isActuallyDemo = status?.isDemo ?? account.isDemo
+
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(account.title)
+                        Text(mainTitle)
                             .font(.system(size: 13, weight: .bold))
                             .foregroundColor(.primary)
                             .lineLimit(1)
 
-                        if account.isDemo || status?.isDemo == true {
+                        if isActuallyDemo {
                             Text("DEMO")
                                 .font(.system(size: 8, weight: .heavy))
                                 .padding(.horizontal, 5)
@@ -50,7 +55,7 @@ public struct ProviderCardView: View {
                         }
                     }
 
-                    Text(status?.planName ?? account.provider.defaultPlan)
+                    Text(subTitle)
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -111,15 +116,16 @@ public struct ProviderCardView: View {
             }
 
             // Spodní řádek: popis stavu a akce
+            let isActuallyDemo = status?.isDemo ?? account.isDemo
             HStack {
                 Text(status?.statusDescription ?? "Načítám stav...")
                     .font(.system(size: 11))
-                    .foregroundColor(account.isDemo ? .orange.opacity(0.9) : .secondary)
+                    .foregroundColor(isActuallyDemo ? .orange.opacity(0.9) : .secondary)
                     .lineLimit(1)
 
                 Spacer()
 
-                if account.isDemo, let onEdit = onEdit {
+                if isActuallyDemo, let onEdit = onEdit {
                     Button(action: onEdit) {
                         Text("Zadat token")
                             .font(.system(size: 10, weight: .semibold))

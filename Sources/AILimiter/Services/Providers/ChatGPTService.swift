@@ -114,7 +114,7 @@ public final class ChatGPTService: @unchecked Sendable {
                         usedCount: used,
                         totalLimit: lim,
                         planName: "OpenAI Platform API",
-                        statusDescription: "\(used)/\(lim) req/min (\(rem) zbývá)",
+                        statusDescription: "\(used)/\(lim) req/min",
                         healthState: health
                     )
                 }
@@ -239,12 +239,8 @@ public final class ChatGPTService: @unchecked Sendable {
                     let desc: String
                     if usedPercent >= 100.0 {
                         desc = "Limit zpráv vyčerpán"
-                    } else if let rem = remainingPercent {
-                        let remVal = rem <= 1.0 ? Int(rem * 100.0) : Int(rem)
-                        desc = "Zbývá \(remVal)% kapacity (využito \(Int(usedPercent))%)"
                     } else {
-                        let remVal = max(0, 100 - Int(usedPercent))
-                        desc = "Zbývá \(remVal)% kapacity (využito \(Int(usedPercent))%)"
+                        desc = "Aktivní okno zpráv"
                     }
 
                     return LimitStatus(

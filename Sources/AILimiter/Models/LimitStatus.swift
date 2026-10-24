@@ -82,9 +82,14 @@ public struct LimitStatus: Identifiable, Codable, Equatable {
         if diff <= 0 {
             return "Obnovuje se..."
         }
-        let hours = Int(diff) / 3600
-        let minutes = (Int(diff) % 3600) / 60
-        if hours > 0 {
+        let totalSeconds = Int(diff)
+        let days = totalSeconds / 86400
+        let hours = (totalSeconds % 86400) / 3600
+        let minutes = (totalSeconds % 3600) / 60
+
+        if days > 0 {
+            return String(format: "Obnovení za %02dd %02dh %02dm", days, hours, minutes)
+        } else if hours > 0 {
             return "Obnovení za \(hours)h \(minutes)m"
         } else {
             return "Obnovení za \(minutes)m"
