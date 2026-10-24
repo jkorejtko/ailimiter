@@ -212,13 +212,19 @@ public final class ChatGPTService: @unchecked Sendable {
 
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 let planType = (json["plan_type"] as? String)?.capitalized ?? "Plus"
-                let planName = "ChatGPT \(planType)"
+                let email = json["email"] as? String
+                let planName = (email != nil) ? "ChatGPT \(planType) (\(email!))" : "ChatGPT \(planType)"
 
                 if let rateLimit = json["rate_limit"] as? [String: Any],
                    let primaryWindow = rateLimit["primary_window"] as? [String: Any] {
-                    var usedPercent = primaryWindow["used_percent"] as? Double ?? 0.0
-                    let remainingPercent = primaryWindow["remaining_percent"] as? Double
-                    let resetsAtSec = primaryWindow["resets_at"] as? Double
+                    var usedPercent = (primaryWindow["used_percent"] as? Double)
+                        ?? Double(primaryWindow["used_percent"] as? Int ?? 0)
+                    let remainingPercent = (primaryWindow["remaining_percent"] as? Double)
+                        ?? (primaryWindow["remaining_percent"] as? Int).map(Double.init)
+                    let resetsAtSec = (primaryWindow["reset_at"] as? Double)
+                        ?? (primaryWindow["resets_at"] as? Double)
+                        ?? (primaryWindow["reset_at"] as? Int).map(Double.init)
+                        ?? (primaryWindow["resets_at"] as? Int).map(Double.init)
 
                     var resetDate: Date? = nil
                     if let resetsAtSec = resetsAtSec, resetsAtSec > 0 {
@@ -235,9 +241,10 @@ public final class ChatGPTService: @unchecked Sendable {
                         desc = "Limit zpráv vyčerpán"
                     } else if let rem = remainingPercent {
                         let remVal = rem <= 1.0 ? Int(rem * 100.0) : Int(rem)
-                        desc = "Zbývá \(remVal)% kapacity okna"
+                        desc = "Zbývá \(remVal)% kapacity (využito \(Int(usedPercent))%)"
                     } else {
-                        desc = "Využito \(Int(usedPercent))% okna"
+                        let remVal = max(0, 100 - Int(usedPercent))
+                        desc = "Zbývá \(remVal)% kapacity (využito \(Int(usedPercent))%)"
                     }
 
                     return LimitStatus(
