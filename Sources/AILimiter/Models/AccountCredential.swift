@@ -25,14 +25,17 @@ public struct AccountCredential: Identifiable, Codable, Equatable {
     }
 
     public var isDemo: Bool {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if trimmed == "auto" {
+            return false
+        }
         if provider == .gemini {
-            let realHome = URL(fileURLWithPath: "/Users/\(NSUserName())")
-            let baseDir = realHome.appendingPathComponent(".gemini/antigravity-ide/brain")
+            let realHome = FileManager.default.homeDirectoryForCurrentUser
+            let baseDir = realHome.appendingPathComponent(".t3/userdata/providers/antigravity")
             if FileManager.default.fileExists(atPath: baseDir.path) {
                 return false
             }
         }
-        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return trimmed == "demo" || trimmed.isEmpty
     }
 }

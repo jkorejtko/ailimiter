@@ -68,15 +68,35 @@ public final class LimitMonitor: ObservableObject {
                 if let secToken = KeychainManager.shared.get(for: acc.id), !secToken.isEmpty {
                     loaded.token = secToken
                 }
+                // Automatická migrace starých nefunkčních/expirovaných manuálních tokenů na živou auto-detekci
+                if loaded.provider == .chatgpt && (loaded.token.hasPrefix("eyJ") || loaded.token == "demo") {
+                    loaded.token = "auto"
+                    loaded.title = "ChatGPT / Codex"
+                } else if loaded.provider == .gemini && (loaded.token.hasPrefix("AQ.") || loaded.token == "demo") {
+                    loaded.token = "auto"
+                    loaded.title = "Antigravity (Gemini)"
+                } else if loaded.provider == .claude && (loaded.token.hasPrefix("sk-ant-sid") || loaded.token == "demo") {
+                    loaded.token = "auto"
+                    loaded.title = "Claude Pro / Team"
+                }
                 return loaded
             }
         }
 
-        // Pokud je seznam prázdný při prvním spuštění, vytvoříme ukázkové účty (demo)
+        // Pokud je seznam prázdný při prvním spuštění, vytvoříme ukázkové účty
         if accounts.isEmpty {
             createInitialDemoAccounts()
         }
 
+        Task {
+            await refreshAll()
+        }
+    }
+
+    public func resetToAutoDetect() {
+        accounts.removeAll()
+        statuses.removeAll()
+        createInitialDemoAccounts()
         Task {
             await refreshAll()
         }
@@ -93,23 +113,23 @@ public final class LimitMonitor: ObservableObject {
     }
 
     private func createInitialDemoAccounts() {
-        let demoChatGPT = AccountCredential(
+        let codexAccount = AccountCredential(
             provider: .chatgpt,
-            title: "Osobní ChatGPT Plus",
-            token: "demo"
+            title: "ChatGPT / Codex",
+            token: "auto"
         )
-        let demoClaude = AccountCredential(
+        let claudeAccount = AccountCredential(
             provider: .claude,
-            title: "Claude Pro",
-            token: "demo"
+            title: "Claude Pro / Team",
+            token: "auto"
         )
-        let demoGemini = AccountCredential(
+        let geminiAccount = AccountCredential(
             provider: .gemini,
-            title: "Google AI Studio",
-            token: "demo"
+            title: "Antigravity (Gemini)",
+            token: "auto"
         )
 
-        accounts = [demoChatGPT, demoClaude, demoGemini]
+        accounts = [codexAccount, claudeAccount, geminiAccount]
         saveAccounts()
     }
 
@@ -179,9 +199,12 @@ public final class LimitMonitor: ObservableObject {
 
         statuses[account.id] = newStatus
 
-        // Pokud se reálný účet úspěšně spojí s API, automaticky odpojíme demo účty
-        if !account.isDemo && newStatus.healthState != .error && !newStatus.isDemo {
-            purgeDemoAccounts()
+        // Pokud účet získal reálná data (není demo), zaktualizujeme metadata účtu
+        if !newStatus.isDemo && newStatus.healthState != .error {
+            if let index = accounts.firstIndex(where: { $0.id == account.id }), accounts[index].isDemo {
+                accounts[index].token = "auto"
+                saveAccounts()
+            }
         }
 
         // Kontrola notifikací při přechodu stavů

@@ -103,6 +103,24 @@ public struct SettingsView: View {
                                 }
                             }
                         }
+
+                        Button(action: {
+                            monitor.resetToAutoDetect()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "wand.and.stars")
+                                Text("Obnovit auto-detekci (Codex & Antigravity)")
+                            }
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.accentColor)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(Color.accentColor.opacity(0.08))
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 4)
+                        .help("Vymaže staré neplatné tokeny a načte živé profily ze systému")
                     }
 
                     Divider()

@@ -108,7 +108,7 @@ public struct PopoverContentView: View {
                 }
             }
         }
-        .frame(width: 350)
+        .frame(width: 360)
         .sheet(isPresented: $showingAddAccountSheet) {
             AddAccountSheet(
                 monitor: monitor,

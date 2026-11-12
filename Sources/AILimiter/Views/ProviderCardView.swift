@@ -33,7 +33,7 @@ public struct ProviderCardView: View {
                 }
 
                 let isAntigravity = status?.planName.contains("Antigravity") == true
-                let mainTitle = isAntigravity ? (status?.planName ?? "Antigravity IDE") : account.title
+                let mainTitle = isAntigravity ? (status?.planName ?? "Antigravity (Gemini)") : account.title
                 let subTitle = isAntigravity ? "Google DeepMind" : (status?.planName ?? account.provider.defaultPlan)
                 let isActuallyDemo = status?.isDemo ?? account.isDemo
 
@@ -53,11 +53,26 @@ public struct ProviderCardView: View {
                                 .foregroundColor(.orange)
                                 .cornerRadius(4)
                         }
+
+                        if let credits = status?.resetCreditsCount, credits > 0 {
+                            HStack(spacing: 3) {
+                                Image(systemName: "ticket.fill")
+                                    .font(.system(size: 8))
+                                Text("\(credits) kredit\(credits == 1 ? "" : (credits < 5 ? "y" : "ů"))")
+                                    .font(.system(size: 9, weight: .semibold))
+                            }
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1.5)
+                            .background(Color.blue.opacity(0.15))
+                            .foregroundColor(.blue)
+                            .cornerRadius(4)
+                        }
                     }
 
                     Text(subTitle)
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
                 }
 
                 Spacer()
@@ -68,75 +83,61 @@ public struct ProviderCardView: View {
                 }
             }
 
-            // Progress bar
+            // Plovoucí okna limitů (T3 Code multi-window layout)
             if let status = status, status.healthState != .error {
-                VStack(alignment: .leading, spacing: 4) {
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.primary.opacity(0.08))
-                                .frame(height: 7)
-
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(status.healthState.color)
-                                .frame(
-                                    width: max(0, min(geometry.size.width * CGFloat(status.usagePercentage / 100.0), geometry.size.width)),
-                                    height: 7
-                                )
-                                .animation(.spring(response: 0.4), value: status.usagePercentage)
+                if !status.windows.isEmpty {
+                    VStack(alignment: .leading, spacing: 7) {
+                        ForEach(status.windows) { window in
+                            WindowRowView(window: window)
                         }
                     }
-                    .frame(height: 7)
-
-                    // Textové info pod progress barem
-                    HStack {
-                        if status.usagePercentage > 0.0 {
-                            Text("\(Int(status.usagePercentage))% vyčerpáno")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("Aktivní v normě")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        if let resetText = status.resetCountdownString {
-                            HStack(spacing: 3) {
-                                Image(systemName: "clock")
-                                    .font(.system(size: 10))
-                                Text(resetText)
-                                    .font(.system(size: 11, weight: .medium))
-                            }
-                            .foregroundColor(status.healthState == .exhausted ? .red : .secondary)
-                        }
-                    }
+                } else {
+                    // Fallback pro starší API bez rozpadu na okna
+                    SingleBarView(
+                        percentage: status.usagePercentage,
+                        health: status.healthState,
+                        resetText: status.resetCountdownString
+                    )
                 }
+            } else if let status = status, status.healthState == .error {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.red)
+                    Text(status.statusDescription)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(8)
+                .background(Color.red.opacity(0.08))
+                .cornerRadius(6)
             }
 
             // Spodní řádek: popis stavu a akce
             let isActuallyDemo = status?.isDemo ?? account.isDemo
-            HStack {
-                Text(status?.statusDescription ?? "Načítám stav...")
-                    .font(.system(size: 11))
-                    .foregroundColor(isActuallyDemo ? .orange.opacity(0.9) : .secondary)
-                    .lineLimit(1)
+            HStack(spacing: 6) {
+                if status?.healthState != .error {
+                    Text(status?.statusDescription ?? "Načítám stav...")
+                        .font(.system(size: 11))
+                        .foregroundColor(isActuallyDemo ? .orange.opacity(0.9) : .secondary)
+                        .lineLimit(1)
+                }
 
                 Spacer()
 
-                if isActuallyDemo, let onEdit = onEdit {
+                if (isActuallyDemo || status?.healthState == .error), let onEdit = onEdit {
                     Button(action: onEdit) {
-                        Text("Zadat token")
+                        Text(status?.healthState == .error ? "Nastavit token" : "Zadat token")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.orange)
+                            .foregroundColor(status?.healthState == .error ? .red : .orange)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2.5)
-                            .background(Color.orange.opacity(0.12))
+                            .background((status?.healthState == .error ? Color.red : Color.orange).opacity(0.12))
                             .cornerRadius(5)
                     }
                     .buttonStyle(.plain)
-                    .help("Zadat skutečný token pro živá data")
+                    .help("Zadat skutečný token nebo použít auto-detekci")
                 }
 
                 if let onEdit = onEdit {
@@ -180,6 +181,130 @@ public struct ProviderCardView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(account.isDemo ? Color.orange.opacity(0.25) : Color.primary.opacity(0.06), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Pomocné komponenty pro okna a progress bary
+
+struct WindowRowView: View {
+    let window: UsageWindow
+
+    var barColor: Color {
+        if window.usedPercent >= 100.0 {
+            return Color(red: 0.91, green: 0.30, blue: 0.24)
+        } else if window.usedPercent >= 80.0 {
+            return Color(red: 0.96, green: 0.65, blue: 0.14)
+        } else {
+            return Color(red: 0.18, green: 0.80, blue: 0.44)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(window.label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.primary.opacity(0.85))
+
+                if let pace = window.pace {
+                    HStack(spacing: 2) {
+                        Image(systemName: pace.iconName)
+                            .font(.system(size: 9))
+                        Text(pace.label)
+                            .font(.system(size: 9, weight: .medium))
+                    }
+                    .foregroundColor(pace.color)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(pace.color.opacity(0.12))
+                    .cornerRadius(3)
+                }
+
+                Spacer()
+
+                Text("\(Int(window.usedPercent))%")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(window.usedPercent >= 100.0 ? .red : (window.usedPercent >= 80.0 ? .orange : .secondary))
+
+                if let countdown = window.resetCountdownString {
+                    HStack(spacing: 2) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 9))
+                        Text(countdown)
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(window.usedPercent >= 100.0 ? .red : .secondary)
+                }
+            }
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3.5)
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(height: 6)
+
+                    RoundedRectangle(cornerRadius: 3.5)
+                        .fill(barColor)
+                        .frame(
+                            width: max(0, min(geometry.size.width * CGFloat(window.usedPercent / 100.0), geometry.size.width)),
+                            height: 6
+                        )
+                        .animation(.spring(response: 0.4), value: window.usedPercent)
+                }
+            }
+            .frame(height: 6)
+        }
+    }
+}
+
+struct SingleBarView: View {
+    let percentage: Double
+    let health: LimitHealthState
+    let resetText: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(height: 7)
+
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(health.color)
+                        .frame(
+                            width: max(0, min(geometry.size.width * CGFloat(percentage / 100.0), geometry.size.width)),
+                            height: 7
+                        )
+                        .animation(.spring(response: 0.4), value: percentage)
+                }
+            }
+            .frame(height: 7)
+
+            HStack {
+                if percentage > 0.0 {
+                    Text("\(Int(percentage))% vyčerpáno")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Aktivní v normě")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                if let resetText = resetText {
+                    HStack(spacing: 3) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 10))
+                        Text(resetText)
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(health == .exhausted ? .red : .secondary)
+                }
+            }
+        }
     }
 }
 

@@ -76,11 +76,11 @@ public enum AIProvider: String, Codable, CaseIterable, Identifiable {
     public var tokenLabel: String {
         switch self {
         case .chatgpt:
-            return "Session Token nebo OpenAI API Key"
+            return "Auto-detekce (auto), Session Token nebo OpenAI API Key"
         case .claude:
-            return "Claude.ai sessionKey nebo Anthropic API Key"
+            return "Auto-detekce (auto), OAuth Token nebo sessionKey"
         case .gemini:
-            return "Google AI Studio API Key nebo Gemini Cookie"
+            return "Auto-detekce (auto), Antigravity profil nebo AI Studio Key"
         case .perplexity:
             return "Perplexity API Key nebo Session Cookie"
         }
@@ -89,11 +89,11 @@ public enum AIProvider: String, Codable, CaseIterable, Identifiable {
     public var tokenPlaceholder: String {
         switch self {
         case .chatgpt:
-            return "sk-... nebo session token"
+            return "auto nebo sk-... / session token"
         case .claude:
-            return "sk-ant-sid01-... nebo sk-ant-api03-..."
+            return "auto nebo sk-ant-oat... / sk-ant-sid..."
         case .gemini:
-            return "AIzaSy..."
+            return "auto nebo AIzaSy..."
         case .perplexity:
             return "pplx-... nebo session-token"
         }
@@ -103,22 +103,20 @@ public enum AIProvider: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .chatgpt:
             return """
-            1. Otevři chatgpt.com v prohlížeči (Chrome/Arc/Safari).
-            2. Stiskni F12 (DevTools) → záložka Application (Úložiště) → Cookies → https://chatgpt.com.
-            3. Zkopíruj hodnotu cookie '__Secure-next-auth.session-token'.
-            Případně zadej standardní OpenAI API klíč (sk-...).
+            • Zadejte 'auto' pro automatické načtení tokenu z lokálního Codex CLI (~/.codex/auth.json).
+            • Nebo vložte ChatGPT session token z Cookies (__Secure-next-auth.session-token).
+            • Případně zadejte standardní OpenAI API klíč (sk-...).
             """
         case .claude:
             return """
-            1. Otevři claude.ai a přihlas se.
-            2. V DevTools (F12) → Application → Cookies → https://claude.ai.
-            3. Zkopíruj hodnotu cookie 'sessionKey' (začíná sk-ant-sid01-...).
-            Případně zadej Anthropic API klíč.
+            • Zadejte 'auto' pro automatické načtení tokenu z lokálního Claude Code CLI (Keychain).
+            • Nebo zadejte Claude Code OAuth token (sk-ant-oat...).
+            • Případně vložte webový cookie 'sessionKey' (sk-ant-sid...) nebo Anthropic API klíč.
             """
         case .gemini:
             return """
-            1. Přejdi na aistudio.google.com a vygeneruj si bezplatný API klíč (Get API key).
-            2. Klíč začíná 'AIzaSy...' – zkopíruj ho a vlož sem pro sledování limitů a kvót.
+            • Zadejte 'auto' pro načtení z lokálního Google Antigravity profilu (~/.t3/userdata).
+            • Nebo zadejte bezplatný Google AI Studio API klíč (AIzaSy...).
             """
         case .perplexity:
             return """
