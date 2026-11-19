@@ -9,19 +9,23 @@ permissions:
 
 jobs:
   check:
-    runs-on: macos-latest
+    # Package.swift requires Swift 6.4, which ships with Xcode 27.
+    runs-on: xcode-27
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: '6.4'
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
       - name: Check secrets
         run: make security
       - name: Test
         run: make test
       - name: Build application
         run: make build
+        env:
+          ARCH: arm64
