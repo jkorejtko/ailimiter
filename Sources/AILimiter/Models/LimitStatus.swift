@@ -89,6 +89,7 @@ public struct UsageWindow: Identifiable, Codable, Equatable, Sendable {
     public var usedPercent: Double          // 0.0 ... 100.0
     public var resetsAt: Date?
     public var windowDurationMins: Int?
+    public var scopeLabel: String?
 
     public init(
         id: String,
@@ -96,7 +97,8 @@ public struct UsageWindow: Identifiable, Codable, Equatable, Sendable {
         label: String,
         usedPercent: Double,
         resetsAt: Date? = nil,
-        windowDurationMins: Int? = nil
+        windowDurationMins: Int? = nil,
+        scopeLabel: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -104,6 +106,7 @@ public struct UsageWindow: Identifiable, Codable, Equatable, Sendable {
         self.usedPercent = min(max(usedPercent, 0.0), 100.0)
         self.resetsAt = resetsAt
         self.windowDurationMins = windowDurationMins
+        self.scopeLabel = scopeLabel
     }
 
     public var remainingPercent: Double {
@@ -129,7 +132,7 @@ public struct UsageWindow: Identifiable, Codable, Equatable, Sendable {
         let now = Date()
         let diff = resetsAt.timeIntervalSince(now)
         if diff <= 0 {
-            return "Obnovuje se..."
+            return "Čeká na aktualizaci"
         }
         let totalSeconds = Int(diff)
         let days = totalSeconds / 86400

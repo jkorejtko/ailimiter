@@ -23,13 +23,13 @@ public final class NotificationService: @unchecked Sendable {
         UNUserNotificationCenter.current().add(request)
     }
 
-    public func sendExhaustedNotification(provider: AIProvider, resetInString: String?) {
+    public func sendExhaustedNotification(provider: AIProvider, detail: String, resetInString: String?) {
         let content = UNMutableNotificationContent()
         content.title = "🔴 Limit vyčerpán: \(provider.displayName)"
         if let resetIn = resetInString {
-            content.body = "Dosáhli jste maxima zpráv. \(resetIn)."
+            content.body = "\(detail). \(resetIn)."
         } else {
-            content.body = "Dosáhli jste maxima zpráv pro aktuální okno."
+            content.body = detail
         }
         content.sound = .default
 

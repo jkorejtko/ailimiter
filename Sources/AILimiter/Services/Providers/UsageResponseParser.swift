@@ -41,7 +41,8 @@ enum UsageResponseParser {
             let session = key == "five_hour"
             let label = session ? "5h Session" : (key == "seven_day" ? "Týdenní" : "Týdenní · \(key.dropFirst(10))")
             windows.append(UsageWindow(id: key, kind: session ? .session : .weekly, label: label,
-                                       usedPercent: used, resetsAt: date(value["resets_at"]), windowDurationMins: session ? 300 : 10080))
+                                       usedPercent: used, resetsAt: date(value["resets_at"]), windowDurationMins: session ? 300 : 10080,
+                                       scopeLabel: session || key == "seven_day" ? nil : String(key.dropFirst(10))))
         }
         if let limits = json["limits"] as? [[String: Any]] {
             for (index, limit) in limits.enumerated() {
@@ -51,7 +52,8 @@ enum UsageResponseParser {
                       let model = scope["model"] as? [String: Any],
                       let name = model["display_name"] as? String else { continue }
                 windows.append(UsageWindow(id: "scoped_\(index)", kind: .weekly, label: "Týdenní · \(name)",
-                                           usedPercent: used, resetsAt: date(limit["resets_at"]), windowDurationMins: 10080))
+                                           usedPercent: used, resetsAt: date(limit["resets_at"]), windowDurationMins: 10080,
+                                           scopeLabel: name))
             }
         }
         return windows
@@ -59,12 +61,24 @@ enum UsageResponseParser {
 
     static func status(for account: AccountCredential, windows: [UsageWindow], plan: String,
                        limitReached: Bool = false) -> LimitStatus {
-        guard !windows.isEmpty else { return .unavailable(for: account, "Poskytovatel nevrátil údaje o kvótě.") }
-        let maximum = windows.max(by: { $0.usedPercent < $1.usedPercent })!
-        let health: LimitHealthState = limitReached || maximum.usedPercent >= 100 ? .exhausted : (maximum.usedPercent >= 80 ? .warning : .normal)
-        return LimitStatus(accountId: account.id, provider: account.provider, usagePercentage: maximum.usedPercent,
-                           planName: plan, statusDescription: health == .exhausted ? "Limit vyčerpán" : "Kvóta načtena",
-                           resetDate: maximum.resetsAt, healthState: health, windows: windows)
+        let overall = windows.filter { $0.scopeLabel == nil }.max { $0.usedPercent < $1.usedPercent }
+        guard !windows.isEmpty || limitReached else { return .unavailable(for: account, "Poskytovatel nevrátil údaje o kvótě.") }
+        let used = overall?.usedPercent ?? 0
+        let health: LimitHealthState = limitReached || used >= 100 ? .exhausted : (used >= 80 ? .warning : .normal)
+        let scoped = windows.filter { $0.scopeLabel != nil && $0.usedPercent >= 100 }
+        let detail: String
+        if let overall, used >= 100 {
+            detail = "Vyčerpáno: \(overall.label)"
+        } else if limitReached {
+            detail = "Poskytovatel hlásí dosažený limit účtu"
+        } else if !scoped.isEmpty {
+            detail = "Vyčerpáno: " + scoped.map(\.label).joined(separator: ", ")
+        } else {
+            detail = "Kvóta načtena"
+        }
+        return LimitStatus(accountId: account.id, provider: account.provider, usagePercentage: limitReached ? 100 : used,
+                           planName: plan, statusDescription: detail,
+                           resetDate: limitReached && used < 100 ? nil : overall?.resetsAt, healthState: health, windows: windows)
     }
 
     static func httpFailure(for account: AccountCredential, code: Int) -> LimitStatus {

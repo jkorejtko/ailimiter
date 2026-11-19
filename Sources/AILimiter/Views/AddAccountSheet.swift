@@ -15,6 +15,50 @@ public struct AddAccountSheet: View {
     @State private var isTokenVisible: Bool = false
     @State private var useLocalProfile: Bool = true
     @State private var profilePath: String?
+    @State private var drafts: [AIProvider: Draft] = [:]
+    @State private var confirmDiscard = false
+
+    private struct Draft: Equatable {
+        var title: String
+        var token: String
+        var profilePath: String?
+        var local: Bool
+    }
+
+    private var draft: Draft {
+        Draft(title: title, token: token, profilePath: profilePath, local: useLocalProfile)
+    }
+
+    private func initialDraft(for provider: AIProvider) -> Draft {
+        let account = accountToEdit.flatMap { $0.provider == provider ? $0 : nil }
+        return Draft(title: account?.displayTitle ?? provider.displayName, token: account?.token ?? "",
+                     profilePath: account?.profilePath,
+                     local: account.map { $0.token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "auto" }
+                         ?? provider.supportsLocalProfiles)
+    }
+
+    private var hasUnsavedChanges: Bool {
+        draft != initialDraft(for: selectedProvider) ||
+            (accountToEdit != nil && accountToEdit?.provider != selectedProvider) ||
+            drafts.contains { $0.key != selectedProvider && $0.value != initialDraft(for: $0.key) }
+    }
+
+    private func cancel() {
+        if hasUnsavedChanges { confirmDiscard = true } else { onDismiss() }
+    }
+
+    private func selectProvider(_ provider: AIProvider) {
+        guard selectedProvider != provider else { return }
+        drafts[selectedProvider] = draft
+        let next = drafts[provider] ?? initialDraft(for: provider)
+        selectedProvider = provider
+        title = next.title
+        token = next.token
+        profilePath = next.profilePath
+        useLocalProfile = next.local
+        isTokenVisible = false
+        testResult = nil
+    }
 
     private var effectiveToken: String {
         useLocalProfile && selectedProvider.supportsLocalProfiles
@@ -30,7 +74,7 @@ public struct AddAccountSheet: View {
         self.accountToEdit = accountToEdit
         self.onDismiss = onDismiss
         _selectedProvider = State(initialValue: accountToEdit?.provider ?? .chatgpt)
-        _title = State(initialValue: accountToEdit?.displayTitle ?? "")
+        _title = State(initialValue: accountToEdit?.displayTitle ?? AIProvider.chatgpt.displayName)
         _token = State(initialValue: accountToEdit?.token ?? "")
         _useLocalProfile = State(
             initialValue: accountToEdit.map {
@@ -48,12 +92,13 @@ public struct AddAccountSheet: View {
 
                 Spacer()
 
-                Button(action: onDismiss) {
+                Button(action: cancel) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16))
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Zavřít editor účtu")
             }
 
             ScrollView {
@@ -69,18 +114,7 @@ public struct AddAccountSheet: View {
                                 ProviderSelectButton(
                                     provider: provider,
                                     isSelected: selectedProvider == provider,
-                                    onSelect: {
-                                        guard selectedProvider != provider else { return }
-                                        selectedProvider = provider
-                                        useLocalProfile = provider.supportsLocalProfiles
-                                        profilePath = nil
-                                        token = ""
-                                        testResult = nil
-                                        if title.isEmpty || AIProvider.allCases.map({ $0.displayName }).contains(title)
-                                        {
-                                            title = provider.displayName
-                                        }
-                                    }
+                                    onSelect: { selectProvider(provider) }
                                 )
                             }
                         }
@@ -239,7 +273,7 @@ public struct AddAccountSheet: View {
 
                 Spacer()
 
-                Button("Zrušit", action: onDismiss)
+                Button("Zrušit", action: cancel)
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
@@ -255,10 +289,11 @@ public struct AddAccountSheet: View {
         }
         .padding(16)
         .frame(width: 400, height: 520)
-        .onAppear {
-            if title.isEmpty {
-                title = selectedProvider.displayName
-            }
+        .interactiveDismissDisabled(hasUnsavedChanges)
+        .onExitCommand(perform: cancel)
+        .alert("Zahodit neuložené změny?", isPresented: $confirmDiscard) {
+            Button("Pokračovat v úpravách", role: .cancel) {}
+            Button("Zahodit změny", role: .destructive, action: onDismiss)
         }
     }
 

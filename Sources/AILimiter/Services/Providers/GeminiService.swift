@@ -90,6 +90,20 @@ public actor GeminiService {
         }
     }
 
+    static func displayWindows(_ windows: [UsageWindow]) -> (primary: [UsageWindow], other: [UsageWindow]) {
+        func priority(_ window: UsageWindow) -> Int {
+            let model = "\(window.id) \(window.label)".lowercased()
+            if model.contains("argon") { return 1 }
+            if model.contains("hydrogen") { return 2 }
+            if window.kind == .session && (model.contains("gemini") || window.id.lowercased() == "5h") && !model.contains("3p") { return 0 }
+            return 3
+        }
+        let primary = windows.filter { priority($0) < 3 }.sorted {
+            (priority($0), $0.id) < (priority($1), $1.id)
+        }
+        return (primary, windows.filter { priority($0) == 3 })
+    }
+
     static func windows(_ json: [String: Any]) -> [UsageWindow] {
         var buckets = json["buckets"] as? [[String: Any]] ?? []
         for group in json["groups"] as? [[String: Any]] ?? [] {
@@ -104,9 +118,10 @@ public actor GeminiService {
             let session = bucket["window"] as? String == "5h" || id.contains("5h")
             let weekly = bucket["window"] as? String == "weekly" || id.contains("weekly")
             let kind: WindowKind = session ? .session : (weekly ? .weekly : .other)
-            return UsageWindow(id: id, kind: kind, label: bucket["displayName"] as? String ?? id,
+            let label = bucket["displayName"] as? String ?? id
+            return UsageWindow(id: id, kind: kind, label: label,
                                usedPercent: (1 - fraction) * 100, resetsAt: UsageResponseParser.date(bucket["resetTime"]),
-                               windowDurationMins: session ? 300 : (weekly ? 10080 : nil))
+                               windowDurationMins: session ? 300 : (weekly ? 10080 : nil), scopeLabel: label)
         }.sorted { $0.id < $1.id }
     }
 }

@@ -5,17 +5,21 @@ public struct ProviderCardView: View {
     public let status: LimitStatus?
     public let onRefresh: () -> Void
     public var onEdit: (() -> Void)? = nil
+    @State private var showOtherWindows = false
+    private let isRefreshing: Bool
 
     public init(
         account: AccountCredential,
         status: LimitStatus?,
         onRefresh: @escaping () -> Void,
-        onEdit: (() -> Void)? = nil
+        onEdit: (() -> Void)? = nil,
+        isRefreshing: Bool = false
     ) {
         self.account = account
         self.status = status
         self.onRefresh = onRefresh
         self.onEdit = onEdit
+        self.isRefreshing = isRefreshing
     }
 
     public var body: some View {
@@ -78,16 +82,28 @@ public struct ProviderCardView: View {
 
                 // Stavový odznak
                 if let health = status?.healthState {
-                    StatusBadge(health: status?.refreshError == nil ? health : .unavailable, isDemo: account.isDemo || status?.isDemo == true)
+                    let scopedOnly = health == .normal && status?.windows.contains { $0.scopeLabel != nil && $0.usedPercent >= 100 } == true
+                    StatusBadge(health: status?.refreshError != nil ? .unavailable : (scopedOnly ? .warning : health),
+                                isDemo: account.isDemo || status?.isDemo == true,
+                                title: scopedOnly && status?.refreshError == nil ? "Dílčí limit" : nil)
                 }
             }
 
             // Plovoucí okna limitů (T3 Code multi-window layout)
             if let status = status, status.hasUsageData {
                 if !status.windows.isEmpty {
-                    VStack(alignment: .leading, spacing: 7) {
-                        ForEach(status.windows) { window in
-                            WindowRowView(window: window)
+                    TimelineView(.periodic(from: .now, by: 30)) { _ in
+                        let groups = account.provider == .gemini ? GeminiService.displayWindows(status.windows) : (primary: status.windows, other: [])
+                        VStack(alignment: .leading, spacing: 7) {
+                            ForEach(groups.primary) { WindowRowView(window: $0) }
+                            if !groups.other.isEmpty {
+                                DisclosureGroup("Další (\(groups.other.count))", isExpanded: $showOtherWindows) {
+                                    VStack(alignment: .leading, spacing: 7) {
+                                        ForEach(groups.other) { WindowRowView(window: $0) }
+                                    }
+                                }
+                                .font(.system(size: 11))
+                            }
                         }
                     }
                 } else {
@@ -107,6 +123,7 @@ public struct ProviderCardView: View {
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
                 }
                 .padding(8)
                 .background(Color.red.opacity(0.08))
@@ -124,17 +141,17 @@ public struct ProviderCardView: View {
             let isActuallyDemo = status?.isDemo ?? account.isDemo
             HStack(spacing: 6) {
                 if status?.hasUsageData != false {
-                    Text(status?.statusDescription ?? "Načítám stav...")
+                    Text(isRefreshing ? "Obnovuji…" : (status?.statusDescription ?? "Čeká na kontrolu"))
                         .font(.system(size: 11))
                         .foregroundColor(isActuallyDemo ? .orange.opacity(0.9) : .secondary)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer()
 
-                if (isActuallyDemo || status?.hasUsageData == false), let onEdit = onEdit {
+                if (isActuallyDemo || status?.healthState == .error), let onEdit = onEdit {
                     Button(action: onEdit) {
-                        Text(status?.healthState == .error ? "Nastavit token" : "Zadat token")
+                        Text("Upravit přihlášení")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(status?.healthState == .error ? .red : .orange)
                             .padding(.horizontal, 6)
@@ -154,6 +171,7 @@ public struct ProviderCardView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Upravit účet")
+                .accessibilityLabel("Upravit účet")
                 }
 
                 // Otevřít web služby
@@ -166,15 +184,22 @@ public struct ProviderCardView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Otevřít \(account.provider.displayName) v prohlížeči")
+                .accessibilityLabel("Otevřít \(account.provider.displayName) v prohlížeči")
 
                 // Ruční obnovení tohoto účtu
                 Button(action: onRefresh) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                    if isRefreshing {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .buttonStyle(.plain)
                 .help("Obnovit tento účet")
+                .accessibilityLabel(isRefreshing ? "Obnovuji účet" : "Obnovit tento účet")
+                .disabled(isRefreshing)
             }
         }
         .padding(12)
@@ -228,9 +253,10 @@ struct WindowRowView: View {
 
                 Spacer()
 
-                Text("\(Int(window.usedPercent))%")
+                Text("\(Int(window.usedPercent)) % využito")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(window.usedPercent >= 100.0 ? .red : (window.usedPercent >= 80.0 ? .orange : .secondary))
+                    .fixedSize()
 
                 if let countdown = window.resetCountdownString {
                     HStack(spacing: 2) {
@@ -317,6 +343,7 @@ struct SingleBarView: View {
 struct StatusBadge: View {
     let health: LimitHealthState
     var isDemo: Bool = false
+    var title: String? = nil
 
     var body: some View {
         HStack(spacing: 4) {
@@ -324,7 +351,7 @@ struct StatusBadge: View {
                 .fill(isDemo ? Color.orange : health.color)
                 .frame(width: 6, height: 6)
 
-            Text(isDemo ? "DEMO" : health.badgeTitle)
+            Text(isDemo ? "DEMO" : (title ?? health.badgeTitle))
                 .font(.system(size: 10, weight: .bold))
                 .foregroundColor(isDemo ? Color.orange : health.color)
         }

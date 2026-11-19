@@ -8,6 +8,7 @@ public final class MenuBarController: NSObject {
     private var popover: NSPopover!
     private var cancellables = Set<AnyCancellable>()
     private var monitor = LimitMonitor.shared
+    private var isEditingAccount = false
 
     override public init() {
         super.init()
@@ -31,7 +32,12 @@ public final class MenuBarController: NSObject {
         popover.contentSize = NSSize(width: 360, height: 460)
         popover.behavior = .transient
         popover.animates = true
-        popover.contentViewController = NSHostingController(rootView: PopoverContentView())
+        var content = PopoverContentView()
+        content.onEditorVisibilityChanged = { [weak self] editing in
+            self?.isEditingAccount = editing
+            self?.popover.behavior = editing ? .applicationDefined : .transient
+        }
+        popover.contentViewController = NSHostingController(rootView: content)
     }
 
     private func observeMonitor() {
@@ -55,7 +61,9 @@ public final class MenuBarController: NSObject {
             symbolName = "exclamationmark.triangle.fill"
         case .warning:
             symbolName = "sparkle"
-        default:
+        case .error, .unavailable:
+            symbolName = "questionmark.circle"
+        case .normal:
             symbolName = "sparkles"
         }
 
@@ -65,12 +73,14 @@ public final class MenuBarController: NSObject {
         }
 
         button.toolTip = "AILimiter – Stav AI limitů (\(state.badgeTitle))"
+        button.setAccessibilityLabel("AILimiter – \(state.badgeTitle)")
     }
 
     @objc public func togglePopover() {
         guard let button = statusItem.button else { return }
 
         if popover.isShown {
+            guard !isEditingAccount else { return }
             popover.performClose(nil)
         } else {
             if let controller = popover.contentViewController {

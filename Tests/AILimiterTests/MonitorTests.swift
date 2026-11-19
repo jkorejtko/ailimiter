@@ -48,7 +48,7 @@ private func sampleStatus(_ account: AccountCredential, percent: Double) -> Limi
     #expect(notifications == 0)
 }
 
-@Test @MainActor func olderRequestCannotOverwriteNewerResult() async throws {
+@Test @MainActor func duplicateRefreshDoesNotStartAnotherRequest() async throws {
     let storage = TestDefaults()
     defer { storage.clear() }
     let repository = AccountRepository(defaults: storage.defaults, credentials: MemoryCredentials())
@@ -59,13 +59,13 @@ private func sampleStatus(_ account: AccountCredential, percent: Double) -> Limi
                                fetch: { await gate.fetch($0) }, notify: { _, _ in })
     let first = Task { await monitor.refreshAccount(account) }
     await gate.waitForRequests(1)
-    let second = Task { await monitor.refreshAccount(account) }
-    await gate.waitForRequests(2)
-    gate.requests[1].resume(returning: sampleStatus(account, percent: 85))
-    await second.value
-    gate.requests[0].resume(returning: sampleStatus(account, percent: 10))
+    #expect(monitor.generations[account.id] != nil)
+    await monitor.refreshAccount(account)
+    #expect(gate.requests.count == 1)
+    gate.requests[0].resume(returning: sampleStatus(account, percent: 85))
     await first.value
     #expect(monitor.statuses[account.id]?.usagePercentage == 85)
+    #expect(monitor.generations[account.id] == nil)
 }
 
 @Test @MainActor func failedRefreshKeepsTimestampAndMarksCachedData() async throws {

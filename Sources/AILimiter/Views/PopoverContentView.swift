@@ -11,6 +11,8 @@ public struct PopoverContentView: View {
     @State private var showingAddAccountSheet: Bool = false
     @State private var editingAccount: AccountCredential? = nil
 
+    var onEditorVisibilityChanged: (Bool) -> Void = { _ in }
+
     public init() {}
 
     public var body: some View {
@@ -56,6 +58,7 @@ public struct PopoverContentView: View {
                 .buttonStyle(.plain)
                 .disabled(monitor.isRefreshing)
                 .help("Obnovit všechny limity nyní")
+                .accessibilityLabel("Obnovit všechny limity")
 
                 // Tlačítko Nastavení
                 Button(action: {
@@ -69,6 +72,7 @@ public struct PopoverContentView: View {
                 }
                 .buttonStyle(.plain)
                 .help(currentTab == .dashboard ? "Nastavení účtů" : "Zpět na přehled")
+                .accessibilityLabel(currentTab == .dashboard ? "Nastavení účtů" : "Zpět na přehled")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -116,7 +120,8 @@ public struct PopoverContentView: View {
                 }
             }
         }
-        .frame(width: 360)
+        .frame(width: 360, height: 460)
+        .onChange(of: showingAddAccountSheet) { onEditorVisibilityChanged($0) }
         .sheet(isPresented: $showingAddAccountSheet) {
             AddAccountSheet(
                 monitor: monitor,

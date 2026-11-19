@@ -35,6 +35,7 @@ public struct SettingsView: View {
                         .font(.system(size: 13))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Přidat účet")
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
@@ -78,6 +79,7 @@ public struct SettingsView: View {
                                         ))
                                         .toggleStyle(.switch)
                                         .controlSize(.mini)
+                                        .accessibilityLabel("Sledovat účet \(account.displayTitle)")
 
                                         Button(action: { onEditAccount(account) }) {
                                             Image(systemName: "pencil")
@@ -85,6 +87,7 @@ public struct SettingsView: View {
                                                 .foregroundColor(.secondary)
                                         }
                                         .buttonStyle(.plain)
+                                        .accessibilityLabel("Upravit účet \(account.displayTitle)")
 
                                         Button(action: {
                                             accountToDelete = account
@@ -96,6 +99,7 @@ public struct SettingsView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .help("Odebrat účet")
+                                        .accessibilityLabel("Odebrat účet \(account.displayTitle)")
                                     }
                                     .padding(8)
                                     .background(Color.primary.opacity(0.03))

@@ -16,7 +16,7 @@ public final class LimitMonitor: ObservableObject {
     private let fetch: @MainActor (AccountCredential) async -> LimitStatus
     private let notify: @MainActor (LimitStatus?, LimitStatus) -> Void
     private var timer: AnyCancellable?
-    private var generations: [UUID: UUID] = [:]
+    @Published private(set) var generations: [UUID: UUID] = [:]
     private var storageAvailable = true
     private let intervalKey = "com.ailimiter.refresh_interval"
 
@@ -38,6 +38,7 @@ public final class LimitMonitor: ObservableObject {
     public var globalState: LimitHealthState {
         if storageError != nil { return .error }
         let active = accounts.filter(\.isEnabled)
+        if active.isEmpty { return .unavailable }
         let values = active.compactMap { statuses[$0.id] }
         if values.contains(where: { $0.healthState == .exhausted }) { return .exhausted }
         if values.contains(where: { $0.healthState == .warning }) { return .warning }
@@ -160,9 +161,12 @@ public final class LimitMonitor: ObservableObject {
     }
 
     public func refreshAccount(_ account: AccountCredential) async {
-        guard account.isEnabled, accounts.contains(account) else { return }
+        guard storageAvailable, account.isEnabled, accounts.contains(account), generations[account.id] == nil else { return }
         let generation = UUID()
         generations[account.id] = generation
+        defer {
+            if generations[account.id] == generation { generations.removeValue(forKey: account.id) }
+        }
         var result = await fetch(account)
         guard generations[account.id] == generation, accounts.contains(account), account.isEnabled else { return }
         let previous = statuses[account.id]
@@ -188,7 +192,7 @@ public final class LimitMonitor: ObservableObject {
         if current.healthState == .warning && oldState != .warning && oldState != .exhausted {
             NotificationService.shared.sendWarningNotification(provider: current.provider, usagePercent: current.usagePercentage)
         } else if current.healthState == .exhausted && oldState != .exhausted {
-            NotificationService.shared.sendExhaustedNotification(provider: current.provider, resetInString: current.resetCountdownString)
+            NotificationService.shared.sendExhaustedNotification(provider: current.provider, detail: current.statusDescription, resetInString: current.resetCountdownString)
         } else if oldState == .exhausted && current.healthState == .normal {
             NotificationService.shared.sendRestoredNotification(provider: current.provider)
         }

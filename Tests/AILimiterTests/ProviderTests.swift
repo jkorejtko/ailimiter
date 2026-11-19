@@ -97,6 +97,38 @@ func codexPercentagesAreAlreadyPercentages(_ percent: Double) {
     #expect(windows.first?.usedPercent == 25)
 }
 
+@Test func modelQuotaDoesNotExhaustTheWholeAccount() {
+    let account = AccountCredential(provider: .claude, title: "Fixture", token: "demo")
+    let windows = UsageResponseParser.claude([
+        "five_hour": ["utilization": 12],
+        "seven_day": ["utilization": 40],
+        "seven_day_opus": ["utilization": 100]
+    ])
+    let status = UsageResponseParser.status(for: account, windows: windows, plan: "Fixture")
+    #expect(status.healthState == .normal)
+    #expect(status.usagePercentage == 40)
+    #expect(status.statusDescription.contains("opus"))
+
+    let exhausted = UsageResponseParser.status(for: account, windows: windows, plan: "Fixture", limitReached: true)
+    #expect(exhausted.healthState == .exhausted)
+    #expect(exhausted.resetDate == nil)
+}
+
+@Test func antigravityShowsPriorityWindowsAndKeepsOtherQuotas() {
+    let windows = GeminiService.windows(["buckets": [
+        ["bucketId": "gemini-hydrogen-weekly", "remainingFraction": 0.8],
+        ["bucketId": "gemini-neon-weekly", "remainingFraction": 0.5],
+        ["bucketId": "gemini-5h", "remainingFraction": 0.75],
+        ["bucketId": "gemini-argon-wtu-weekly", "remainingFraction": 0.9],
+        ["bucketId": "3p-5h", "remainingFraction": 0]
+    ]])
+    let groups = GeminiService.displayWindows(windows)
+    #expect(groups.primary.map(\.id) == ["gemini-5h", "gemini-argon-wtu-weekly", "gemini-hydrogen-weekly"])
+    #expect(groups.other.map(\.id) == ["3p-5h", "gemini-neon-weekly"])
+    let account = AccountCredential(provider: .gemini, title: "Fixture", token: "demo")
+    #expect(UsageResponseParser.status(for: account, windows: windows, plan: "Fixture").healthState == .normal)
+}
+
 @Test func codexUsesProvidedAccountAndReadOnlyEndpoint() async {
     let stub = StubSession { request in
         #expect(request.httpMethod == "GET")
