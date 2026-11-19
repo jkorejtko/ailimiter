@@ -1,13 +1,19 @@
-.PHONY: build run install clean
+.PHONY: build run install test security clean
 
 build:
-	@./scripts/build_app.sh
+	@bash scripts/build_app.sh
 
 run:
-	@./scripts/build_app.sh run
+	@bash scripts/build_app.sh run
 
 install:
-	@./scripts/build_app.sh install
+	@bash scripts/build_app.sh install
 
 clean:
 	@rm -rf build dist
+
+test:
+	@swift test --disable-xctest
+
+security:
+	@python3 scripts/check_secrets.py

@@ -63,7 +63,7 @@ public struct SettingsView: View {
                                             .frame(width: 18)
 
                                         VStack(alignment: .leading, spacing: 1) {
-                                            Text(account.title)
+                                            Text(account.displayTitle)
                                                 .font(.system(size: 12, weight: .medium))
                                             Text(account.provider.displayName)
                                                 .font(.system(size: 10))
@@ -109,7 +109,7 @@ public struct SettingsView: View {
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "wand.and.stars")
-                                Text("Obnovit auto-detekci (Codex & Antigravity)")
+                                Text("Přidat lokální profily")
                             }
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.accentColor)
@@ -120,7 +120,7 @@ public struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.top, 4)
-                        .help("Vymaže staré neplatné tokeny a načte živé profily ze systému")
+                        .help("Přidá chybějící lokální profily a zachová ručně nastavené účty")
                     }
 
                     Divider()

@@ -1,6 +1,6 @@
 import SwiftUI
 
-public enum AIProvider: String, Codable, CaseIterable, Identifiable {
+public enum AIProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     case chatgpt = "chatgpt"
     case claude = "claude"
     case gemini = "gemini"
@@ -11,11 +11,11 @@ public enum AIProvider: String, Codable, CaseIterable, Identifiable {
     public var displayName: String {
         switch self {
         case .chatgpt:
-            return "ChatGPT"
+            return "Codex"
         case .claude:
             return "Claude"
         case .gemini:
-            return "Google Gemini"
+            return "Antigravity"
         case .perplexity:
             return "Perplexity"
         }
@@ -24,11 +24,11 @@ public enum AIProvider: String, Codable, CaseIterable, Identifiable {
     public var defaultPlan: String {
         switch self {
         case .chatgpt:
-            return "ChatGPT Plus / Team"
+            return "Codex předplatné"
         case .claude:
             return "Claude Pro / Max"
         case .gemini:
-            return "Google AI Studio API"
+            return "Antigravity"
         case .perplexity:
             return "Perplexity Pro"
         }
@@ -63,39 +63,50 @@ public enum AIProvider: String, Codable, CaseIterable, Identifiable {
     public var webUrl: URL {
         switch self {
         case .chatgpt:
-            return URL(string: "https://chatgpt.com")!
+            return URL(string: "https://chatgpt.com/codex")!
         case .claude:
             return URL(string: "https://claude.ai")!
         case .gemini:
-            return URL(string: "https://gemini.google.com")!
+            return URL(string: "https://antigravity.google")!
         case .perplexity:
             return URL(string: "https://www.perplexity.ai")!
+        }
+    }
+
+    public var supportsLocalProfiles: Bool { self != .perplexity }
+
+    public var defaultProfileDescription: String {
+        switch self {
+        case .chatgpt: return "Výchozí: ~/.codex/auth.json"
+        case .claude: return "Výchozí: Claude Code Keychain, potom ~/.claude/.credentials.json"
+        case .gemini: return "Výchozí: jediný acp_token.json v ~/.t3/userdata/providers/antigravity"
+        case .perplexity: return "Lokální profil není podporován."
         }
     }
 
     public var tokenLabel: String {
         switch self {
         case .chatgpt:
-            return "Auto-detekce (auto), Session Token nebo OpenAI API Key"
+            return "auto, OAuth token nebo ChatGPT session cookie"
         case .claude:
             return "Auto-detekce (auto), OAuth Token nebo sessionKey"
         case .gemini:
-            return "Auto-detekce (auto), Antigravity profil nebo AI Studio Key"
+            return "auto pro lokální Antigravity profil"
         case .perplexity:
-            return "Perplexity API Key nebo Session Cookie"
+            return "Perplexity session cookie"
         }
     }
 
     public var tokenPlaceholder: String {
         switch self {
         case .chatgpt:
-            return "auto nebo sk-... / session token"
+            return "auto nebo OAuth / session token"
         case .claude:
             return "auto nebo sk-ant-oat... / sk-ant-sid..."
         case .gemini:
-            return "auto nebo AIzaSy..."
+            return "auto"
         case .perplexity:
-            return "pplx-... nebo session-token"
+            return "session-token"
         }
     }
 
@@ -103,25 +114,25 @@ public enum AIProvider: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .chatgpt:
             return """
-            • Zadejte 'auto' pro automatické načtení tokenu z lokálního Codex CLI (~/.codex/auth.json).
+            • Vyberte lokální auth.json přihlášeného Codex účtu nebo použijte výchozí profil.
             • Nebo vložte ChatGPT session token z Cookies (__Secure-next-auth.session-token).
-            • Případně zadejte standardní OpenAI API klíč (sk-...).
+            • Jde o kvótu Codexu, nikoli počet zpráv na webu ChatGPT. API klíč tuto kvótu neposkytuje.
             """
         case .claude:
             return """
-            • Zadejte 'auto' pro automatické načtení tokenu z lokálního Claude Code CLI (Keychain).
+            • Vyberte lokální credentials JSON soubor nebo použijte výchozí Claude Code Keychain.
             • Nebo zadejte Claude Code OAuth token (sk-ant-oat...).
-            • Případně vložte webový cookie 'sessionKey' (sk-ant-sid...) nebo Anthropic API klíč.
+            • Případně vložte webovou cookie 'sessionKey' (sk-ant-sid...). API klíč tuto kvótu neposkytuje.
             """
         case .gemini:
             return """
-            • Zadejte 'auto' pro načtení z lokálního Google Antigravity profilu (~/.t3/userdata).
-            • Nebo zadejte bezplatný Google AI Studio API klíč (AIzaSy...).
+            • Vyberte OAuth JSON profil s client_id, client_secret a refresh_token. Umístění není omezené na T3 Code.
+            • Výchozí autodetekce hledá jediný acp_token.json v adresáři T3 Code. AI Studio klíč tuto kvótu neposkytuje.
             """
         case .perplexity:
             return """
-            1. Přejdi na perplexity.ai/settings/api pro získání API klíče (pplx-...).
-            2. Nebo v DevTools zkopíruj session token z cookies.
+            • V DevTools na perplexity.ai zkopírujte session cookie. Čtení kvóty je experimentální.
+            • API klíč neposkytuje limit webového předplatného.
             """
         }
     }

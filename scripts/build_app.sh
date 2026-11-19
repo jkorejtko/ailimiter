@@ -1,57 +1,38 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SWIFT_BIN="/Library/Developer/CommandLineTools/usr/bin/swiftc"
-SDK_PATH="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
-PLUGIN_PATH="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins"
-BUILD_DIR="$PROJECT_DIR/build"
 APP_BUNDLE="$PROJECT_DIR/dist/AILimiter.app"
-ENTITLEMENTS="$PROJECT_DIR/Resources/AILimiter.entitlements"
+BUILD_ARCH="${ARCH:-$(uname -m)}"
+MODE="${1:-build}"
 
-echo "🚀 [AILimiter] Začínám sestavení zabezpečené macOS Menu Bar aplikace..."
+case "$MODE" in
+    build|run|install) ;;
+    *) echo "Usage: $0 [build|run|install]" >&2; exit 2 ;;
+esac
+case "$BUILD_ARCH" in
+    arm64|x86_64) ;;
+    *) echo "Unsupported architecture: $BUILD_ARCH" >&2; exit 2 ;;
+esac
 
-# Vytvoření adresářů
-rm -rf "$BUILD_DIR" "$PROJECT_DIR/dist"
-mkdir -p "$BUILD_DIR"
-mkdir -p "$APP_BUNDLE/Contents/MacOS"
-mkdir -p "$APP_BUNDLE/Contents/Resources"
-
-# Vyhledání všech Swift souborů
-SWIFT_FILES=$(find "$PROJECT_DIR/Sources/AILimiter" -name "*.swift" -type f)
-
-echo "📦 Kompiluji zdrojové soubory Swiftu..."
-"$SWIFT_BIN" \
-    -parse-as-library \
-    -sdk "$SDK_PATH" \
-    -plugin-path "$PLUGIN_PATH" \
-    -O \
-    -target arm64-apple-macos13.0 \
-    -framework AppKit \
-    -framework SwiftUI \
-    -framework UserNotifications \
-    -framework Security \
-    $SWIFT_FILES \
-    -o "$APP_BUNDLE/Contents/MacOS/AILimiter"
-
-# Kopírování Info.plist
+# Use the selected Xcode/Command Line Tools and the package's compiler settings.
+cd "$PROJECT_DIR"
+swift build --configuration release --arch "$BUILD_ARCH"
+BIN_DIR="$(swift build --configuration release --arch "$BUILD_ARCH" --show-bin-path)"
+mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
+cp "$BIN_DIR/AILimiter" "$APP_BUNDLE/Contents/MacOS/AILimiter"
 cp "$PROJECT_DIR/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
-
-# Nastavení spustitelnosti
+cp "$PROJECT_DIR/LICENSE" "$PROJECT_DIR/THIRD_PARTY_NOTICES.md" "$APP_BUNDLE/Contents/Resources/"
 chmod +x "$APP_BUNDLE/Contents/MacOS/AILimiter"
 
-# Podpis aplikace se striktním App Sandboxem (zakazuje čtení jakýchkoliv souborů v systému)
-echo "🔒 Aplikuji striktní App Sandbox a bezpečnostní oprávnění..."
-codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BUNDLE"
+# Local ad-hoc signing; this does not sandbox or notarize the application.
+codesign --force --sign - "$APP_BUNDLE"
+codesign --verify --strict "$APP_BUNDLE"
+echo "Built $APP_BUNDLE ($BUILD_ARCH; local ad-hoc signature)"
 
-echo "✅ [AILimiter] Úspěšně sestaveno a zabezpečeno do $APP_BUNDLE"
-
-if [ "$1" == "run" ]; then
-    echo "▶️ Spouštím aplikaci do menu baru..."
+if [ "$MODE" = "run" ]; then
     open "$APP_BUNDLE"
-elif [ "$1" == "install" ]; then
-    echo "📥 Instaluji do /Applications/AILimiter.app..."
-    rm -rf "/Applications/AILimiter.app"
-    cp -R "$APP_BUNDLE" "/Applications/"
-    echo "✅ Nainstalováno! Aplikaci najdeš v /Applications."
+elif [ "$MODE" = "install" ]; then
+    ditto "$APP_BUNDLE" "/Applications/AILimiter.app"
+    echo "Installed /Applications/AILimiter.app"
 fi

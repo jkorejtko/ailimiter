@@ -49,7 +49,7 @@ public struct DashboardView: View {
                             .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.primary)
 
-                        Text("Zobrazují se statické hodnoty. Pro napojení na živé limity vložte do účtu svůj token / klíč.")
+                        Text("Zobrazují se statické hodnoty. Pro živé kvóty nastavte auto nebo přihlašovací token předplatného.")
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                     }

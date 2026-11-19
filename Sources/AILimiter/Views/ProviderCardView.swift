@@ -32,9 +32,8 @@ public struct ProviderCardView: View {
                         .foregroundColor(account.provider.brandColor)
                 }
 
-                let isAntigravity = status?.planName.contains("Antigravity") == true
-                let mainTitle = isAntigravity ? (status?.planName ?? "Antigravity (Gemini)") : account.title
-                let subTitle = isAntigravity ? "Google DeepMind" : (status?.planName ?? account.provider.defaultPlan)
+                let mainTitle = account.displayTitle
+                let subTitle = status?.planName ?? account.provider.defaultPlan
                 let isActuallyDemo = status?.isDemo ?? account.isDemo
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -79,12 +78,12 @@ public struct ProviderCardView: View {
 
                 // Stavový odznak
                 if let health = status?.healthState {
-                    StatusBadge(health: health, isDemo: account.isDemo || status?.isDemo == true)
+                    StatusBadge(health: status?.refreshError == nil ? health : .unavailable, isDemo: account.isDemo || status?.isDemo == true)
                 }
             }
 
             // Plovoucí okna limitů (T3 Code multi-window layout)
-            if let status = status, status.healthState != .error {
+            if let status = status, status.hasUsageData {
                 if !status.windows.isEmpty {
                     VStack(alignment: .leading, spacing: 7) {
                         ForEach(status.windows) { window in
@@ -99,7 +98,7 @@ public struct ProviderCardView: View {
                         resetText: status.resetCountdownString
                     )
                 }
-            } else if let status = status, status.healthState == .error {
+            } else if let status = status {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 11))
@@ -114,10 +113,17 @@ public struct ProviderCardView: View {
                 .cornerRadius(6)
             }
 
+            if let status, let error = status.refreshError {
+                Text("Poslední známá data (\(status.lastChecked.formatted(date: .omitted, time: .shortened))). \(error)")
+                    .font(.system(size: 10))
+                    .foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             // Spodní řádek: popis stavu a akce
             let isActuallyDemo = status?.isDemo ?? account.isDemo
             HStack(spacing: 6) {
-                if status?.healthState != .error {
+                if status?.hasUsageData != false {
                     Text(status?.statusDescription ?? "Načítám stav...")
                         .font(.system(size: 11))
                         .foregroundColor(isActuallyDemo ? .orange.opacity(0.9) : .secondary)
@@ -126,7 +132,7 @@ public struct ProviderCardView: View {
 
                 Spacer()
 
-                if (isActuallyDemo || status?.healthState == .error), let onEdit = onEdit {
+                if (isActuallyDemo || status?.hasUsageData == false), let onEdit = onEdit {
                     Button(action: onEdit) {
                         Text(status?.healthState == .error ? "Nastavit token" : "Zadat token")
                             .font(.system(size: 10, weight: .semibold))

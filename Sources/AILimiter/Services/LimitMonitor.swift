@@ -7,237 +7,190 @@ public final class LimitMonitor: ObservableObject {
 
     @Published public var accounts: [AccountCredential] = []
     @Published public var statuses: [UUID: LimitStatus] = [:]
-    @Published public var isRefreshing: Bool = false
-    @Published public var lastRefreshTime: Date? = nil
-    @Published public var refreshIntervalMinutes: Int = 10
+    @Published public var isRefreshing = false
+    @Published public var lastRefreshTime: Date?
+    @Published public var refreshIntervalMinutes = 10
+    @Published public var storageError: String?
 
+    private let repository: AccountRepository
+    private let fetch: @MainActor (AccountCredential) async -> LimitStatus
+    private let notify: @MainActor (LimitStatus?, LimitStatus) -> Void
     private var timer: AnyCancellable?
-    private let accountsKey = "com.ailimiter.saved_accounts"
+    private var generations: [UUID: UUID] = [:]
+    private var storageAvailable = true
     private let intervalKey = "com.ailimiter.refresh_interval"
 
+    init(repository: AccountRepository = AccountRepository(), startAutomatically: Bool = true,
+         fetch: @escaping @MainActor (AccountCredential) async -> LimitStatus = LimitMonitor.fetchProvider,
+         notify: @escaping @MainActor (LimitStatus?, LimitStatus) -> Void = LimitMonitor.sendNotifications) {
+        self.repository = repository
+        self.fetch = fetch
+        self.notify = notify
+        let saved = repository.defaults.integer(forKey: intervalKey)
+        if [2, 5, 10, 30].contains(saved) { refreshIntervalMinutes = saved }
+        loadAccounts()
+        if startAutomatically {
+            setupTimer()
+            Task { await refreshAll() }
+        }
+    }
+
     public var globalState: LimitHealthState {
-        let activeStatuses = accounts.filter { $0.isEnabled }.compactMap { statuses[$0.id] }
-        if activeStatuses.contains(where: { $0.healthState == .exhausted }) {
-            return .exhausted
-        }
-        if activeStatuses.contains(where: { $0.healthState == .warning }) {
-            return .warning
-        }
-        if activeStatuses.contains(where: { $0.healthState == .error }) {
-            return .error
-        }
+        if storageError != nil { return .error }
+        let active = accounts.filter(\.isEnabled)
+        let values = active.compactMap { statuses[$0.id] }
+        if values.contains(where: { $0.healthState == .exhausted }) { return .exhausted }
+        if values.contains(where: { $0.healthState == .warning }) { return .warning }
+        if values.contains(where: { $0.healthState == .error || $0.refreshError != nil }) { return .error }
+        if values.count < active.count || values.contains(where: { $0.healthState == .unavailable }) { return .unavailable }
         return .normal
     }
 
-    private init() {
-        loadSettings()
+    private func loadAccounts() {
+        do {
+            if let saved = try repository.load() {
+                accounts = saved
+            } else {
+                let initial = autoAccounts()
+                try repository.save(initial)
+                accounts = initial
+            }
+            storageAvailable = true
+            storageError = nil
+        } catch {
+            storageAvailable = false
+            storageError = "Účty nelze bezpečně načíst. Původní data zůstala zachována. \(error.localizedDescription)"
+        }
+    }
+
+    public func retryStorage() {
         loadAccounts()
-        setupTimer()
+        if storageAvailable { Task { await refreshAll() } }
     }
 
     public func setupTimer() {
         timer?.cancel()
-        let interval = TimeInterval(refreshIntervalMinutes * 60)
-        timer = Timer.publish(every: interval, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                Task {
-                    await self?.refreshAll()
-                }
-            }
+        timer = Timer.publish(every: TimeInterval(refreshIntervalMinutes * 60), on: .main, in: .common)
+            .autoconnect().sink { [weak self] _ in Task { await self?.refreshAll() } }
     }
 
     public func setRefreshInterval(_ minutes: Int) {
+        guard [2, 5, 10, 30].contains(minutes) else { return }
         refreshIntervalMinutes = minutes
-        UserDefaults.standard.set(minutes, forKey: intervalKey)
+        repository.defaults.set(minutes, forKey: intervalKey)
         setupTimer()
     }
 
-    private func loadSettings() {
-        let savedInterval = UserDefaults.standard.integer(forKey: intervalKey)
-        if savedInterval > 0 {
-            refreshIntervalMinutes = savedInterval
+    private func autoAccounts() -> [AccountCredential] {
+        [.chatgpt, .claude, .gemini].map {
+            AccountCredential(provider: $0, title: $0.displayName, token: "auto")
         }
     }
 
-    private func loadAccounts() {
-        if let data = UserDefaults.standard.data(forKey: accountsKey),
-           let decoded = try? JSONDecoder().decode([AccountCredential].self, from: data) {
-            self.accounts = decoded.map { acc in
-                var loaded = acc
-                if let secToken = KeychainManager.shared.get(for: acc.id), !secToken.isEmpty {
-                    loaded.token = secToken
-                }
-                // Automatická migrace starých nefunkčních/expirovaných manuálních tokenů na živou auto-detekci
-                if loaded.provider == .chatgpt && (loaded.token.hasPrefix("eyJ") || loaded.token == "demo") {
-                    loaded.token = "auto"
-                    loaded.title = "ChatGPT / Codex"
-                } else if loaded.provider == .gemini && (loaded.token.hasPrefix("AQ.") || loaded.token == "demo") {
-                    loaded.token = "auto"
-                    loaded.title = "Antigravity (Gemini)"
-                } else if loaded.provider == .claude && (loaded.token.hasPrefix("sk-ant-sid") || loaded.token == "demo") {
-                    loaded.token = "auto"
-                    loaded.title = "Claude Pro / Team"
-                }
-                return loaded
-            }
-        }
-
-        // Pokud je seznam prázdný při prvním spuštění, vytvoříme ukázkové účty
-        if accounts.isEmpty {
-            createInitialDemoAccounts()
-        }
-
-        Task {
-            await refreshAll()
+    private func save(_ updated: [AccountCredential]) -> Bool {
+        guard storageAvailable else { return false }
+        do {
+            try repository.save(updated)
+            accounts = updated
+            storageError = nil
+            return true
+        } catch {
+            storageError = "Účet nebyl uložen. \(error.localizedDescription)"
+            return false
         }
     }
 
     public func resetToAutoDetect() {
-        accounts.removeAll()
-        statuses.removeAll()
-        createInitialDemoAccounts()
-        Task {
-            await refreshAll()
+        // Add explicit local profiles without replacing manually configured accounts.
+        let missing = autoAccounts().filter { candidate in
+            !accounts.contains { $0.provider == candidate.provider && $0.token.lowercased() == "auto" && $0.profilePath == nil }
         }
+        if save(accounts + missing) { Task { await refreshAll() } }
     }
 
-    private func saveAccounts() {
-        for acc in accounts {
-            _ = KeychainManager.shared.save(token: acc.token, for: acc.id)
-        }
-        // Ukládáme metadata (bezpečný token je v Keychain)
-        if let encoded = try? JSONEncoder().encode(accounts) {
-            UserDefaults.standard.set(encoded, forKey: accountsKey)
-        }
+    @discardableResult
+    public func addAccount(_ account: AccountCredential) -> Bool {
+        guard save(accounts + [account]) else { return false }
+        Task { await refreshAccount(account) }
+        return true
     }
 
-    private func createInitialDemoAccounts() {
-        let codexAccount = AccountCredential(
-            provider: .chatgpt,
-            title: "ChatGPT / Codex",
-            token: "auto"
-        )
-        let claudeAccount = AccountCredential(
-            provider: .claude,
-            title: "Claude Pro / Team",
-            token: "auto"
-        )
-        let geminiAccount = AccountCredential(
-            provider: .gemini,
-            title: "Antigravity (Gemini)",
-            token: "auto"
-        )
-
-        accounts = [codexAccount, claudeAccount, geminiAccount]
-        saveAccounts()
-    }
-
-    public func addAccount(_ account: AccountCredential) {
-        accounts.append(account)
-        saveAccounts()
-        Task {
-            await refreshAccount(account)
-        }
-    }
-
-    public func updateAccount(_ account: AccountCredential) {
-        if let index = accounts.firstIndex(where: { $0.id == account.id }) {
-            accounts[index] = account
-            saveAccounts()
-            Task {
-                await refreshAccount(account)
-            }
-        }
+    @discardableResult
+    public func updateAccount(_ account: AccountCredential) -> Bool {
+        guard let index = accounts.firstIndex(where: { $0.id == account.id }) else { return false }
+        var updated = accounts
+        updated[index] = account
+        guard save(updated) else { return false }
+        generations.removeValue(forKey: account.id)
+        statuses.removeValue(forKey: account.id)
+        Task { await refreshAccount(account) }
+        return true
     }
 
     public func deleteAccount(id: UUID) {
-        accounts.removeAll(where: { $0.id == id })
-        statuses.removeValue(forKey: id)
-        KeychainManager.shared.delete(for: id)
-        saveAccounts()
+        guard storageAvailable else { return }
+        do {
+            let updated = accounts.filter { $0.id != id }
+            try repository.remove(id, remainingAccounts: updated)
+            accounts = updated
+            generations.removeValue(forKey: id)
+            statuses.removeValue(forKey: id)
+            storageError = nil
+        } catch {
+            storageError = "Účet nebyl odebrán. \(error.localizedDescription)"
+        }
     }
 
     public func toggleAccount(id: UUID) {
-        if let index = accounts.firstIndex(where: { $0.id == id }) {
-            accounts[index].isEnabled.toggle()
-            saveAccounts()
-            if accounts[index].isEnabled {
-                Task {
-                    await refreshAccount(accounts[index])
-                }
-            }
-        }
+        guard let index = accounts.firstIndex(where: { $0.id == id }) else { return }
+        var updated = accounts
+        updated[index].isEnabled.toggle()
+        guard save(updated) else { return }
+        generations.removeValue(forKey: id)
+        let account = updated[index]
+        if account.isEnabled { Task { await refreshAccount(account) } }
     }
 
     public func refreshAll() async {
-        guard !isRefreshing else { return }
+        guard !isRefreshing, storageAvailable else { return }
         isRefreshing = true
-
-        for account in accounts where account.isEnabled {
-            await refreshAccount(account)
-        }
-
+        defer { isRefreshing = false }
+        for account in accounts where account.isEnabled { await refreshAccount(account) }
         lastRefreshTime = Date()
-        isRefreshing = false
     }
 
     public func refreshAccount(_ account: AccountCredential) async {
-        let previousStatus = statuses[account.id]
-        let newStatus: LimitStatus
+        guard account.isEnabled, accounts.contains(account) else { return }
+        let generation = UUID()
+        generations[account.id] = generation
+        var result = await fetch(account)
+        guard generations[account.id] == generation, accounts.contains(account), account.isEnabled else { return }
+        let previous = statuses[account.id]
+        if !result.hasUsageData, var cached = previous, cached.hasUsageData, !cached.isDemo {
+            cached.refreshError = result.statusDescription
+            result = cached
+        }
+        statuses[account.id] = result
+        if result.hasUsageData, result.refreshError == nil, !result.isDemo { notify(previous, result) }
+    }
 
+    private static func fetchProvider(_ account: AccountCredential) async -> LimitStatus {
         switch account.provider {
-        case .chatgpt:
-            newStatus = await ChatGPTService.shared.fetchLimitStatus(for: account)
-        case .claude:
-            newStatus = await ClaudeService.shared.fetchLimitStatus(for: account)
-        case .gemini:
-            newStatus = await GeminiService.shared.fetchLimitStatus(for: account)
-        case .perplexity:
-            newStatus = await PerplexityService.shared.fetchLimitStatus(for: account)
+        case .chatgpt: return await ChatGPTService.shared.fetchLimitStatus(for: account)
+        case .claude: return await ClaudeService.shared.fetchLimitStatus(for: account)
+        case .gemini: return await GeminiService.shared.fetchLimitStatus(for: account)
+        case .perplexity: return await PerplexityService.shared.fetchLimitStatus(for: account)
         }
-
-        statuses[account.id] = newStatus
-
-        // Pokud účet získal reálná data (není demo), zaktualizujeme metadata účtu
-        if !newStatus.isDemo && newStatus.healthState != .error {
-            if let index = accounts.firstIndex(where: { $0.id == account.id }), accounts[index].isDemo {
-                accounts[index].token = "auto"
-                saveAccounts()
-            }
-        }
-
-        // Kontrola notifikací při přechodu stavů
-        checkNotifications(oldStatus: previousStatus, newStatus: newStatus)
     }
 
-    public func purgeDemoAccounts() {
-        let demoAccounts = accounts.filter { $0.isDemo }
-        guard !demoAccounts.isEmpty else { return }
-
-        for demo in demoAccounts {
-            statuses.removeValue(forKey: demo.id)
-            KeychainManager.shared.delete(for: demo.id)
-        }
-        accounts.removeAll(where: { $0.isDemo })
-        saveAccounts()
-    }
-
-    private func checkNotifications(oldStatus: LimitStatus?, newStatus: LimitStatus) {
-        let oldState = oldStatus?.healthState ?? .normal
-
-        if newStatus.healthState == .warning && oldState != .warning && oldState != .exhausted {
-            NotificationService.shared.sendWarningNotification(
-                provider: newStatus.provider,
-                usagePercent: newStatus.usagePercentage
-            )
-        } else if newStatus.healthState == .exhausted && oldState != .exhausted {
-            NotificationService.shared.sendExhaustedNotification(
-                provider: newStatus.provider,
-                resetInString: newStatus.resetCountdownString
-            )
-        } else if oldState == .exhausted && newStatus.healthState == .normal {
-            NotificationService.shared.sendRestoredNotification(provider: newStatus.provider)
+    private static func sendNotifications(_ previous: LimitStatus?, _ current: LimitStatus) {
+        let oldState = previous?.healthState
+        if current.healthState == .warning && oldState != .warning && oldState != .exhausted {
+            NotificationService.shared.sendWarningNotification(provider: current.provider, usagePercent: current.usagePercentage)
+        } else if current.healthState == .exhausted && oldState != .exhausted {
+            NotificationService.shared.sendExhaustedNotification(provider: current.provider, resetInString: current.resetCountdownString)
+        } else if oldState == .exhausted && current.healthState == .normal {
+            NotificationService.shared.sendRestoredNotification(provider: current.provider)
         }
     }
 }

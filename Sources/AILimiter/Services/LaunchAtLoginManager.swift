@@ -27,7 +27,7 @@ public final class LaunchAtLoginManager: ObservableObject {
             isEnabled = (SMAppService.mainApp.status == .enabled)
         } catch {
             // Při vývoji bez instalace do /Applications může SMAppService vyžadovat registraci aplikace
-            isEnabled = enabled
+            checkStatus()
         }
     }
 }

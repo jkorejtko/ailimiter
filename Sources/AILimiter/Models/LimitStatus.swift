@@ -1,10 +1,11 @@
 import SwiftUI
 
-public enum LimitHealthState: String, Codable {
+public enum LimitHealthState: String, Codable, Sendable {
     case normal     // < 80%
     case warning    // 80% - 99%
     case exhausted  // 100% / rate limited
     case error      // Network error, expired token, etc.
+    case unavailable // No reported quota; never treat this as zero usage.
 
     public var color: Color {
         switch self {
@@ -14,7 +15,7 @@ public enum LimitHealthState: String, Codable {
             return Color(red: 0.96, green: 0.65, blue: 0.14) // Amber / Orange
         case .exhausted:
             return Color(red: 0.91, green: 0.30, blue: 0.24) // Crimson Red
-        case .error:
+        case .error, .unavailable:
             return Color.secondary
         }
     }
@@ -29,11 +30,13 @@ public enum LimitHealthState: String, Codable {
             return "Limit vyčerpán"
         case .error:
             return "Chyba"
+        case .unavailable:
+            return "Nedostupné"
         }
     }
 }
 
-public enum WindowKind: String, Codable {
+public enum WindowKind: String, Codable, Sendable {
     case session
     case weekly
     case monthly
@@ -49,7 +52,7 @@ public enum WindowKind: String, Codable {
     }
 }
 
-public enum LimitPace: String, Codable {
+public enum LimitPace: String, Codable, Sendable {
     case ahead
     case on
     case under
@@ -79,7 +82,7 @@ public enum LimitPace: String, Codable {
     }
 }
 
-public struct UsageWindow: Identifiable, Codable, Equatable {
+public struct UsageWindow: Identifiable, Codable, Equatable, Sendable {
     public var id: String
     public var kind: WindowKind
     public var label: String
@@ -143,7 +146,7 @@ public struct UsageWindow: Identifiable, Codable, Equatable {
     }
 }
 
-public struct LimitStatus: Identifiable, Codable, Equatable {
+public struct LimitStatus: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public let accountId: UUID
     public let provider: AIProvider
@@ -161,6 +164,21 @@ public struct LimitStatus: Identifiable, Codable, Equatable {
     public var windows: [UsageWindow]
     public var resetCreditsCount: Int?
     public var nextCreditExpiresAt: Date?
+    public var refreshError: String? = nil
+
+    public var hasUsageData: Bool {
+        healthState != .error && healthState != .unavailable
+    }
+
+    static func unavailable(for account: AccountCredential, _ message: String) -> LimitStatus {
+        LimitStatus(accountId: account.id, provider: account.provider, usagePercentage: 0,
+                    planName: account.provider.displayName, statusDescription: message, healthState: .unavailable)
+    }
+
+    static func failure(for account: AccountCredential, _ message: String) -> LimitStatus {
+        LimitStatus(accountId: account.id, provider: account.provider, usagePercentage: 0,
+                    planName: account.provider.displayName, statusDescription: message, healthState: .error)
+    }
 
     public init(
         id: UUID = UUID(),

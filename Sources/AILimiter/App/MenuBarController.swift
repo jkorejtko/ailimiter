@@ -36,6 +36,7 @@ public final class MenuBarController: NSObject {
 
     private func observeMonitor() {
         monitor.$statuses
+            .combineLatest(monitor.$accounts, monitor.$storageError)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }

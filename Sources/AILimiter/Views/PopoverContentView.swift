@@ -76,6 +76,14 @@ public struct PopoverContentView: View {
 
             Divider()
 
+            if let error = monitor.storageError {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(error).font(.system(size: 11)).foregroundColor(.red)
+                    Button("Zkusit úložiště znovu") { monitor.retryStorage() }
+                }
+                .padding(10)
+            }
+
             // Obsah dle aktivní záložky
             Group {
                 switch currentTab {
